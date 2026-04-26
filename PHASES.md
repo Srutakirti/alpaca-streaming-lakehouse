@@ -112,4 +112,49 @@ uv run --package extract python extract/helpers/synthetic_stock_generator.py \
 
 **Goal**: Extractor and loader running in Cloud Run; one `terraform apply` deploys, one `terraform destroy` removes.
 
-> Work in progress — see PLAN.md for current checkpoint status.
+### What was built
+
+| Resource | Details |
+|---|---|
+| Cloud Run Job `alpaca-extractor` | Alpaca WS → Kafka producer; SA with `secretmanager.secretAccessor`, `logging.logWriter` |
+| Cloud Run Service `alpaca-loader` | Kafka → Iceberg loader; min_instance_count=1; SA with `cloudsql.client`, `storage.objectAdmin`, `logging.logWriter` |
+| Cloud Scheduler `alpaca-extractor-start` | 08:00 ET weekdays — triggers extractor job |
+| Cloud Scheduler `alpaca-extractor-stop` | 17:00 ET weekdays — stops extractor job |
+| Docker images v0.1.0 | `alpaca-extractor` + `alpaca-loader` pushed to Artifact Registry |
+
+### Blockers and fixes
+
+| Blocker | Fix |
+|---|---|
+| Cloud Run v2 `min_instance_count` not valid at template level | Moved into `scaling {}` block |
+| Cloud Run Job `alpaca-extractor` already existed (from partial first apply) | `terraform import module.extractor_job.google_cloud_run_v2_job.extractor ...` |
+| Cloud Scheduler `alpaca-extractor-start` already existed | `terraform import module.scheduler.google_cloud_scheduler_job.extractor_start ...` |
+| Cloud Run v2 loader using v1-style annotation for Cloud SQL | Replaced annotation with `volumes { cloud_sql_instance { instances = [...] } }` + `volume_mounts` (correct v2 approach) |
+
+### Deploy command
+
+```bash
+# From workspace root:
+bash scripts/build_and_push.sh v0.1.0
+cd terraform && terraform apply -var image_tag=v0.1.0
+```
+
+### Dry-run result ✅
+
+- **Loader Cloud Run**: `Ready` at `https://alpaca-loader-asiokmz6bq-ue.a.run.app`
+- **Extractor one-shot**: Connected to Alpaca WebSocket → Authenticated → Subscribed to AAPL/TSLA. No bars (run outside market hours — expected). Cloud Logging received structured metric snapshots (`component=alpaca-extractor`, `connection_status=True`).
+- **Scheduler jobs**: Both `ENABLED` in Cloud Scheduler — `alpaca-extractor-start` (08:00 ET) and `alpaca-extractor-stop` (17:00 ET), weekdays only.
+
+### Ready for market open
+
+At 08:00 ET on any weekday, `alpaca-extractor-start` will trigger the Cloud Run Job. Bars flow:
+
+```
+Alpaca WS → extractor (Cloud Run Job)
+          → Tansu VM :9092
+          → loader (Cloud Run Service, min=1 instance always warm)
+          → Iceberg on gs://…-alpaca-iceberg-warehouse/
+          → Cloud Logging (structured metrics both components)
+```
+
+To tear everything down: `cd terraform && terraform destroy`

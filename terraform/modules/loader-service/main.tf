@@ -34,6 +34,13 @@ resource "google_cloud_run_v2_service" "loader" {
       min_instance_count = 1
     }
 
+    volumes {
+      name = "cloudsql"
+      cloud_sql_instance {
+        instances = [var.cloudsql_instance_connection_name]
+      }
+    }
+
     containers {
       image = "${var.image_base}/alpaca-loader:${var.image_tag}"
 
@@ -86,13 +93,14 @@ resource "google_cloud_run_v2_service" "loader" {
         value = "10"
       }
 
+      volume_mounts {
+        name       = "cloudsql"
+        mount_path = "/cloudsql"
+      }
+
       ports {
         container_port = 8080
       }
-    }
-
-    annotations = {
-      "run.googleapis.com/cloudsql-instances" = var.cloudsql_instance_connection_name
     }
   }
 
