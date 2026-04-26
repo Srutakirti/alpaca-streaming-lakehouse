@@ -21,6 +21,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 
 from confluent_kafka import Producer
+from confluent_kafka.admin import AdminClient, NewTopic
 
 
 STOCK_UNIVERSE = {
@@ -122,17 +123,35 @@ def run(symbols: List[str], kafka_bootstrap: str, topic: str, rate: float, metri
     signal.signal(signal.SIGTERM, handle_shutdown)
     signal.signal(signal.SIGINT, handle_shutdown)
 
-    print(f"Connected to {kafka_bootstrap}, publishing to topic '{topic}'")
+    # Ensure topic exists — Tansu does not auto-create topics.
+    print(f"Connecting to {kafka_bootstrap}...")
+    admin = AdminClient({"bootstrap.servers": kafka_bootstrap})
+    fs = admin.create_topics([NewTopic(topic, num_partitions=1, replication_factor=1)])
+    for t, f in fs.items():
+        try:
+            f.result()
+            print(f"Created Kafka topic '{t}'")
+        except Exception as e:
+            print(f"Topic '{t}': {e}")  # TOPIC_ALREADY_EXISTS is fine
+
+    # Force metadata fetch so delivery callbacks fire promptly.
+    producer.list_topics(timeout=10)
+    print(f"Ready. Publishing to topic '{topic}'")
     print(f"Symbols: {', '.join(symbols)} | Rate: {rate} iter/sec | Press Ctrl+C to stop\n")
 
     interval = 1.0 / rate
+    batch_flush_every = max(1, int(rate))  # flush delivery callbacks once per second
+    iteration = 0
     try:
         while not stop.is_set():
             t0 = time.monotonic()
             bars = [simulators[s].get_next_bar() for s in symbols]
             payload = json.dumps(bars).encode("utf-8")
             producer.produce(topic, value=payload, callback=lambda err, msg: _delivery_callback(metrics, err, msg))
-            producer.poll(0)
+            iteration += 1
+            # poll(0.01) gives librdkafka time to process acks; flush every second
+            if iteration % batch_flush_every == 0:
+                producer.poll(0.01)
             elapsed = time.monotonic() - t0
             time.sleep(max(0.0, interval - elapsed))
     finally:

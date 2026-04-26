@@ -11,6 +11,7 @@ from typing import Optional
 
 import pyarrow as pa
 from confluent_kafka import Consumer, KafkaError, TopicPartition
+from confluent_kafka.admin import AdminClient, NewTopic
 from pyiceberg.catalog.sql import SqlCatalog
 from pyiceberg.schema import Schema as IcebergSchema
 from pyiceberg.types import (
@@ -138,7 +139,21 @@ def start_health_server():
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
 
+def ensure_kafka_topic(broker: str, topic: str) -> None:
+    admin = AdminClient({"bootstrap.servers": broker})
+    fs = admin.create_topics([NewTopic(topic, num_partitions=1, replication_factor=1)])
+    for t, f in fs.items():
+        try:
+            f.result()
+        except Exception:
+            pass  # TOPIC_ALREADY_EXISTS is fine
+
+
 def bootstrap_iceberg() -> any:
+    # Ensure local warehouse directory exists before SQLite tries to open it
+    if ICEBERG_WAREHOUSE.startswith(("./", "/")) or not ICEBERG_WAREHOUSE.startswith("gs://"):
+        os.makedirs(ICEBERG_WAREHOUSE, exist_ok=True)
+
     catalog_props = {
         "uri": ICEBERG_CATALOG_URI,
         "warehouse": ICEBERG_WAREHOUSE,
@@ -176,6 +191,9 @@ def main():
     logger = setup_logging(LOG_NAME, LOG_MODE, LOG_LEVEL)
     start_health_server()
     logger.info(f"Health server on port {PORT}")
+
+    ensure_kafka_topic(KAFKA_BROKER, KAFKA_TOPIC)
+    logger.info(f"Kafka topic '{KAFKA_TOPIC}' ready on {KAFKA_BROKER}")
 
     iceberg_table = bootstrap_iceberg()
     logger.info(f"Iceberg table ready: {ICEBERG_NAMESPACE}.{ICEBERG_TABLE} @ {ICEBERG_WAREHOUSE}")

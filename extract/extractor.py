@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from dataclasses import dataclass, field
 from confluent_kafka import Producer
+from confluent_kafka.admin import AdminClient, NewTopic
 from google.cloud import secretmanager
 import google.cloud.logging
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
@@ -161,7 +162,18 @@ async def main() -> None:
     alpaca_key = get_secret(sm_client, project_id, "ALPACA_KEY")
     alpaca_secret = get_secret(sm_client, project_id, "ALPACA_SECRET")
 
+    # Ensure topic exists — Tansu does not auto-create topics.
+    admin = AdminClient({"bootstrap.servers": kafka_broker})
+    fs = admin.create_topics([NewTopic(kafka_topic, num_partitions=1, replication_factor=1)])
+    for t, f in fs.items():
+        try:
+            f.result()
+        except Exception:
+            pass  # TOPIC_ALREADY_EXISTS is fine
+
     producer = Producer({"bootstrap.servers": kafka_broker})
+    producer.list_topics(timeout=10)  # force connection before entering the async loop
+    logger.info(f"Kafka producer connected to {kafka_broker}")
 
     shutdown_event = asyncio.Event()
     metrics = Metrics()
