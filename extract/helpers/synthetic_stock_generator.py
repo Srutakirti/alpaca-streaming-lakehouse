@@ -17,7 +17,7 @@ import argparse
 import sys
 import signal
 import threading
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
 
 from confluent_kafka import Producer
@@ -48,7 +48,7 @@ class StockPriceSimulator:
         self.current_price = base_price
         self.volatility = volatility
 
-    def get_next_bar(self) -> Dict[str, Any]:
+    def get_next_bar(self, bar_time: datetime) -> Dict[str, Any]:
         change_pct = random.gauss(0, self.volatility / 100)
         base_price = STOCK_UNIVERSE.get(self.symbol, {}).get('base', self.current_price)
         reversion_force = (base_price - self.current_price) * 0.01
@@ -69,7 +69,7 @@ class StockPriceSimulator:
             'l': round(low_price, 2),
             'c': round(self.current_price, 2),
             'v': volume,
-            't': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+            't': bar_time.strftime('%Y-%m-%dT%H:%M:%SZ'),
             'n': max(1, int(volume / random.randint(50, 200))),
             'vw': round(vwap, 2),
         }
@@ -100,11 +100,16 @@ def _metrics_emitter(metrics: _Metrics, interval: int, stop: threading.Event, sy
         )
 
 
-def run(symbols: List[str], kafka_bootstrap: str, topic: str, rate: float, metrics_interval: int) -> None:
+def run(symbols: List[str], kafka_bootstrap: str, topic: str, rate: float, metrics_interval: int,
+        bar_interval: int) -> None:
     simulators = {}
     for symbol in symbols:
         info = STOCK_UNIVERSE.get(symbol, {'base': 100.0, 'volatility': 5.0})
         simulators[symbol] = StockPriceSimulator(symbol, info['base'], info['volatility'])
+
+    # Simulated bar clock: starts far enough back to give a full history window.
+    # Each iteration advances by bar_interval seconds so every bar has a unique timestamp.
+    bar_time = datetime.now(timezone.utc) - timedelta(seconds=bar_interval * 500)
 
     metrics = _Metrics()
     producer = Producer({"bootstrap.servers": kafka_bootstrap})
@@ -145,7 +150,8 @@ def run(symbols: List[str], kafka_bootstrap: str, topic: str, rate: float, metri
     try:
         while not stop.is_set():
             t0 = time.monotonic()
-            bars = [simulators[s].get_next_bar() for s in symbols]
+            bars = [simulators[s].get_next_bar(bar_time) for s in symbols]
+            bar_time += timedelta(seconds=bar_interval)
             payload = json.dumps(bars).encode("utf-8")
             producer.produce(topic, value=payload, callback=lambda err, msg: _delivery_callback(metrics, err, msg))
             iteration += 1
@@ -167,13 +173,16 @@ def main():
     parser.add_argument("--kafka", default="localhost:9092", help="Kafka bootstrap servers")
     parser.add_argument("--topic", default="alpaca-bars", help="Kafka topic")
     parser.add_argument("--metrics-interval", type=int, default=10, help="Seconds between metrics printout")
+    parser.add_argument("--bar-interval", type=int, default=60,
+                        help="Simulated seconds between bars (default 60 = 1-min bars). "
+                             "Starts 500 bars in the past so the chart has history immediately.")
     args = parser.parse_args()
 
     unknown = [s for s in args.symbols if s not in STOCK_UNIVERSE]
     if unknown:
         print(f"Note: {unknown} not in STOCK_UNIVERSE, using defaults (base=100, vol=5%)")
 
-    run(args.symbols, args.kafka, args.topic, args.rate, args.metrics_interval)
+    run(args.symbols, args.kafka, args.topic, args.rate, args.metrics_interval, args.bar_interval)
 
 
 if __name__ == "__main__":
