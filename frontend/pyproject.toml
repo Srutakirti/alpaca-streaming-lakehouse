@@ -1,0 +1,12 @@
+[project]
+name = "frontend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pyiceberg[sql-postgres]>=0.7",
+    "psycopg2-binary>=2.9",
+    "pyarrow>=17",
+    "google-cloud-logging>=3.10",
+]

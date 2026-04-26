@@ -1,0 +1,63 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #0f1117;
+  color: #e2e8f0;
+  min-height: 100vh;
+}
+
+.app { display: flex; flex-direction: column; min-height: 100vh; }
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: #1a1d27;
+  border-bottom: 1px solid #2d3148;
+}
+
+.nav-brand { font-weight: 700; font-size: 1rem; color: #7c83ff; margin-right: auto; }
+
+.nav-link { color: #94a3b8; text-decoration: none; font-size: 0.9rem; padding: 0.25rem 0.5rem; border-radius: 4px; }
+.nav-link:hover { color: #e2e8f0; background: #2d3148; }
+.nav-link.active { color: #7c83ff; background: #2d3148; }
+
+.main { flex: 1; padding: 1.5rem; max-width: 1200px; width: 100%; margin: 0 auto; }
+
+.page-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 1.25rem; color: #e2e8f0; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+
+.card {
+  background: #1a1d27;
+  border: 1px solid #2d3148;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+.card-label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.35rem; }
+.card-value { font-size: 1.4rem; font-weight: 700; }
+.card-sub { font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; }
+
+.green { color: #4ade80; }
+.red { color: #f87171; }
+.yellow { color: #facc15; }
+.muted { color: #64748b; }
+
+.section { background: #1a1d27; border: 1px solid #2d3148; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+.section-title { font-size: 0.85rem; font-weight: 600; color: #94a3b8; margin-bottom: 0.75rem; }
+
+.chart-wrap { width: 100%; height: 340px; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1.25rem; }
+.controls label { font-size: 0.8rem; color: #94a3b8; }
+.controls select, .controls input {
+  background: #1a1d27; border: 1px solid #2d3148; border-radius: 6px;
+  color: #e2e8f0; padding: 0.35rem 0.6rem; font-size: 0.875rem;
+}
+
+.sparkline-wrap { width: 100%; height: 120px; }
+
+.loading { color: #64748b; font-size: 0.875rem; }
+.error-msg { color: #f87171; font-size: 0.875rem; }
