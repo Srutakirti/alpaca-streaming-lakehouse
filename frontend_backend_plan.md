@@ -5,15 +5,14 @@ FastAPI backend + React SPA as a Cloud Run service. Monitoring dashboard + OHLC 
 ## Checklist
 
 - [x] **Persist this checklist in the repo.** (`frontend_backend_plan.md`)
-- [ ] **Scaffold uv member.** `frontend/pyproject.toml`, add to root workspace members, `uv sync`.
-- [ ] **Backend: Iceberg read.** `iceberg_client.py`, `routes/bars.py` (`/api/symbols`, `/api/bars`).
-- [ ] **Backend: Cloud Logging read.** `logging_client.py`, `routes/pipeline.py` (`/api/pipeline/status`, `/api/pipeline/metrics`).
-- [ ] **Backend: app shell.** `app/main.py` — FastAPI, CORS, static mount, `/api/health`. Curl smoke test.
-- [ ] **Commit checkpoint:** `feat(frontend): fastapi backend with iceberg + cloud logging read endpoints`
-- [ ] **SPA scaffold.** Vite+React+TS, react-router, TanStack Query, lightweight-charts.
-- [ ] **Monitoring page.** Status cards, lag sparkline, last-batch table; polls `/api/pipeline/status` every 5s.
-- [ ] **Visualization page.** Symbol picker + date range → candlestick + volume chart.
-- [ ] **Commit checkpoint:** `feat(frontend): react spa with monitoring and visualization views`
+- [x] **Scaffold uv member.** `frontend/pyproject.toml`, add to root workspace members, `uv sync`.
+- [x] **Backend: Iceberg read.** `iceberg_client.py`, `routes/bars.py` (`/api/symbols`, `/api/bars`).
+- [x] **Backend: Cloud Logging read.** `logging_client.py`, `routes/pipeline.py` (`/api/pipeline/status`, `/api/pipeline/metrics`).
+- [x] **Backend: app shell.** `app/main.py` — FastAPI, CORS, static mount, `/api/health`. Curl smoke test.
+- [x] **SPA scaffold.** Vite+React+TS, react-router, TanStack Query, lightweight-charts.
+- [x] **Monitoring page.** Status cards, lag sparkline, last-batch table; polls `/api/pipeline/status` every 5s.
+- [x] **Visualization page.** Symbol picker + date range → candlestick + volume chart.
+- [x] **Commit checkpoint:** `feat(frontend): fastapi backend with iceberg + cloud logging read endpoints` ✓
 - [ ] 🛑 **Stage A verification.** Synthetic generator → GCP Tansu; local FastAPI + Vite → GCP Iceberg + Cloud Logging. **Pause for user sign-off.**
 - [ ] **Dockerfile.** Multi-stage (node build → python+uv). Build + run locally.
 - [ ] **build_and_push.sh.** Append `alpaca-frontend` build/push. Test with `v0.2.0`.
