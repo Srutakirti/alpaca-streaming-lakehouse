@@ -42,9 +42,9 @@ All three components emit periodic structured metric snapshots → Cloud Logging
 
 ## Phase 0 — Bootstrap (commit the plan, branch off)
 
-- [ ] Copy this file to repo root as `PLAN.md`.
-- [ ] Create feature branch: `git checkout -b feat/tansu-iceberg-pipeline`.
-- [ ] **Commit:** `docs: add tansu+iceberg pipeline plan`
+- [x] Copy this file to repo root as `PLAN.md`.
+- [x] Create feature branch: `git checkout -b feat/tansu-iceberg-pipeline`.
+- [x] **Commit:** `docs: add tansu+iceberg pipeline plan`
 
 ---
 
@@ -53,50 +53,33 @@ All three components emit periodic structured metric snapshots → Cloud Logging
 Goal: rewritten extractor / loader / generator working end-to-end on a local Docker Tansu with a sqlite catalog and local FS warehouse.
 
 ### 1.1 Dependency + Dockerfile updates
-- [ ] `extract/pyproject.toml`: add `confluent-kafka>=2.3.0`; remove `google-cloud-pubsub`. Keep `google-cloud-secret-manager`, `google-cloud-logging`, `websockets`.
-- [ ] `load/pyproject.toml`: add `confluent-kafka>=2.3.0`, `pyiceberg[sql,gcs]>=0.7.0`, `psycopg2-binary`, `google-cloud-logging>=3.14.0`; remove `google-cloud-pubsub`, `google-cloud-storage`. Keep `pyarrow`.
-- [ ] `extract/Dockerfile` + `load/Dockerfile`: install `librdkafka1` at runtime; loader also installs `libpq5`.
-- [ ] `uv sync` from repo root → resolve.
-- [ ] **Commit:** `chore: switch deps to confluent-kafka + pyiceberg`
+- [x] `extract/pyproject.toml`: add `confluent-kafka>=2.3.0`; remove `google-cloud-pubsub`.
+- [x] `load/pyproject.toml`: add `confluent-kafka>=2.3.0`, `pyiceberg[sql-sqlite,sql-postgres,gcsfs,gcp-auth]>=0.7.0`, `psycopg2-binary`, `google-cloud-logging`.
+- [x] Both Dockerfiles: install `librdkafka1` at runtime; loader also `libpq5`.
+- [x] **Commit:** `chore: switch deps to confluent-kafka + pyiceberg`
 
 ### 1.2 Rewrite `extract/extractor.py` (Alpaca → Kafka)
-- [ ] Drop `google.cloud.pubsub_v1`; add `confluent_kafka.Producer`.
-- [ ] Replace `publish()` (lines 57-58) with `producer.produce(topic, value=msg, callback=on_delivery)` + periodic `producer.poll(0)`.
-- [ ] Extend `Metrics` dataclass (lines 17-32) with `delivery_failures`, `last_delivery_ts`.
-- [ ] Replace per-message metrics log (line 103) with periodic emitter (`METRICS_INTERVAL`, default 10s).
-- [ ] Env vars: `KAFKA_BROKER` (default `localhost:9092`), `KAFKA_TOPIC` (default `alpaca-bars`); drop `PUBSUB_TOPIC_ID`.
-- [ ] Keep Secret Manager fetch (139-141), retry loop (80-119), SIGTERM/SIGINT handlers (149-154) intact in shape.
-- [ ] **Commit:** `feat(extract): produce alpaca bars to kafka via confluent-kafka`
+- [x] Done. AdminClient topic creation on startup, Producer with delivery callback, periodic metrics emitter.
+- [x] **Commit:** `feat(extract): produce alpaca bars to kafka via confluent-kafka`
 
 ### 1.3 Rewrite `extract/helpers/synthetic_stock_generator.py`
-- [ ] Remove `aiokafka`, remove `extract.app.conf_reader.Config` import.
-- [ ] Replace asyncio loop with synchronous `Producer` + `time.sleep(1/rate)`.
-- [ ] CLI: `--symbols`, `--rate`, `--kafka` (default `localhost:9092`), `--topic` (default `alpaca-bars`); drop `--config`.
-- [ ] Keep `StockPriceSimulator`, `STOCK_UNIVERSE`, JSON-array-of-bars message shape.
-- [ ] Add periodic-metrics emitter (stdout-only by default).
-- [ ] Add `aiokafka` removal note + `helpers/` no longer dead-code in `CLAUDE.md`.
-- [ ] **Commit:** `feat(extract): make synthetic generator runnable on confluent-kafka`
+- [x] Done. confluent-kafka sync producer, AdminClient topic creation, CLI cleaned up.
+- [x] **Commit:** `feat(extract): make synthetic generator runnable on confluent-kafka`
 
 ### 1.4 Rewrite `load/subscriber.py` → Kafka → Iceberg loader
-- [ ] Drop `google.cloud.pubsub_v1`, `google.cloud.storage`, `pyarrow.parquet`, `records_to_parquet()`, `gcs_path()`.
-- [ ] Add `confluent_kafka.Consumer`, `pyiceberg.catalog.sql.SqlCatalog`.
-- [ ] Env vars: `KAFKA_BROKER`, `KAFKA_TOPIC`, `KAFKA_GROUP_ID`, `ICEBERG_CATALOG_URI`, `ICEBERG_WAREHOUSE`, `ICEBERG_NAMESPACE`, `ICEBERG_TABLE`; keep `BATCH_SIZE`, `BATCH_INTERVAL`, `PORT`.
-- [ ] On startup: load/create namespace + table from translated `SCHEMA` (lines 22-31).
-- [ ] Loop: `consumer.poll(1.0)` → decode → project (line 94 logic) → buffer → flush on size/time → `iceberg_table.append(arrow_table)` → `consumer.commit(asynchronous=False)`. `enable.auto.commit=False`.
-- [ ] Lift `setup_logging` from `extract/extractor.py:40-54` (Cloud Logging + stdout fan-out).
-- [ ] Add metrics emitter: `messages_consumed`, `records_appended`, `batches_flushed`, `last_flush_duration_ms`, `iceberg_append_errors`, `consumer_lag` (via `get_watermark_offsets - position`), `last_commit_ts`.
-- [ ] Keep health-check HTTP server (lines 34-46) verbatim.
-- [ ] SIGTERM/SIGINT pattern (mirror `extractor.py:149-154`) → close consumer cleanly.
-- [ ] **Commit:** `feat(load): kafka→iceberg loader with cloud-logging metrics`
+- [x] Done. confluent Consumer, PyIceberg SqlCatalog, at-least-once commits, consumer_lag metric.
+- [x] **Commit:** `feat(load): kafka→iceberg loader with cloud-logging metrics`
 
-### 1.5 Run the smoke test
-- [ ] `docker run -d --name tansu -p 9092:9092 ghcr.io/tansu-io/tansu:0.6.0 --storage-engine memory:// --kafka-listener-url tcp://0.0.0.0:9092 --kafka-advertised-listener-url tcp://localhost:9092`
-- [ ] Terminal A — loader: `LOG_MODE=stdout KAFKA_BROKER=localhost:9092 ICEBERG_CATALOG_URI=sqlite:///./warehouse/catalog.db ICEBERG_WAREHOUSE=./warehouse uv run --package load python load/subscriber.py`
-- [ ] Terminal B — generator: `uv run --package extract python extract/helpers/synthetic_stock_generator.py --kafka localhost:9092 --topic alpaca-bars --symbols AAPL TSLA NVDA --rate 20`
-- [ ] Verify loader logs show `messages_consumed` rising, `consumer_lag ≈ 0`, `batches_flushed` ticking.
-- [ ] Verify rows in Iceberg: `python -c "from pyiceberg.catalog.sql import SqlCatalog; c=SqlCatalog('d', uri='sqlite:///./warehouse/catalog.db', warehouse='./warehouse'); print(c.load_table('alpaca.bars').scan().to_arrow().to_pandas().tail())"`
-- [ ] `docker stop tansu && docker rm tansu`.
-- [ ] **Commit:** `chore: phase-1 local smoke results / fixes` (only if any fixes were needed)
+### 1.5 Run the smoke test ✅ PASSED
+- [x] Started Tansu via Docker (memory:// storage)
+- [x] Loader started: health server up, Iceberg table created (`alpaca.bars`)
+- [x] Generator started: `sent=279+, errors=0`
+- [x] Loader metrics confirmed: `messages_consumed=356, records_appended=1530, batches_flushed=35+, consumer_lag≈0, iceberg_append_errors=0`
+- [x] Iceberg table verified: 1530 rows, symbols AAPL/TSLA/NVDA, schema correct
+- [x] Tansu stopped and removed
+- [x] **Commit:** `fix: tansu requires explicit topic creation + producer warmup`
+
+> **Note (Tansu quirk):** Tansu does not auto-create topics. All producers/consumers must call `AdminClient.create_topics()` on startup. `producer.list_topics(timeout=10)` is also required to force the TCP handshake before the production loop starts, otherwise `poll(0)` fires with no ready callbacks.
 
 ---
 
@@ -105,21 +88,17 @@ Goal: rewritten extractor / loader / generator working end-to-end on a local Doc
 Goal: real Tansu VM + Cloud SQL + GCS warehouse stood up via Terraform; loader runs on laptop pointed at the cloud resources to validate networking and credentials before paying for Cloud Run.
 
 ### 2.1 Terraform skeleton at repo root
-- [ ] Create `terraform/{main.tf,variables.tf,outputs.tf,providers.tf,terraform.tfvars.example}`.
-- [ ] Define `google` + `google-beta` providers; `var.project_id`, `var.region` (default `us-east1`), `var.image_tag`, `var.alpaca_symbols`.
-- [ ] **Commit:** `chore(infra): scaffold root terraform stack`
+- [x] Created `terraform/{main.tf,variables.tf,outputs.tf,providers.tf,terraform.tfvars.example}`.
+- [x] **Commit:** `feat(infra): full terraform stack — warehouse, catalog, tansu, cloud run, scheduler`
 
 ### 2.2 Storage modules
-- [ ] `terraform/modules/warehouse/`: two `google_storage_bucket`s (`alpaca-iceberg-warehouse`, `alpaca-tansu-storage`), `google_storage_hmac_key` for the Tansu service account, HMAC secret pushed to Secret Manager. `prevent_destroy = true` toggleable via var.
-- [ ] `terraform/modules/catalog/`: Cloud SQL Postgres `db-f1-micro`, database `iceberg`, user `iceberg`, password via `random_password` → Secret Manager.
-- [ ] `terraform/modules/artifact-registry/`: data source for `alpaca-datalake` repo, `count = 0/1` to create only if absent.
-- [ ] **Commit:** `feat(infra): warehouse, catalog, artifact-registry modules`
+- [x] `terraform/modules/warehouse/`: GCS buckets, HMAC key, Secret Manager.
+- [x] `terraform/modules/catalog/`: Cloud SQL Postgres, database, password → SM.
+- [x] `terraform/modules/artifact-registry/`: data source for existing `alpaca-datalake` AR repo.
 
-### 2.3 Tansu broker module (wraps existing tansu_kafka modules)
-- [ ] `terraform/modules/tansu-broker/`: instantiates `tansu_kafka/terraform/modules/gcp-vm` + `tansu-install`.
-- [ ] Edit `tansu_kafka/terraform/modules/tansu-install/main.tf` (additive): thread HMAC creds + `AWS_ENDPOINT_URL=https://storage.googleapis.com` env vars into the systemd unit; pass `--storage-engine s3://alpaca-tansu-storage/`. Defaults preserve current behavior.
-- [ ] Outputs: `broker_url`, `broker_ip`.
-- [ ] **Commit:** `feat(infra): tansu broker module with s3-on-gcs storage`
+### 2.3 Tansu broker module
+- [x] `terraform/modules/tansu-broker/`: wraps gcp-vm + tansu-install with HMAC s3 creds.
+- [x] `tansu-install/main.tf`: additive HMAC env-var threading for s3:// backend.
 
 ### 2.4 Apply staging subset
 - [ ] `cd terraform && terraform init && terraform apply -target=module.warehouse -target=module.catalog -target=module.artifact_registry -target=module.tansu_broker`.
