@@ -1,0 +1,11 @@
+[project]
+name = "load"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "confluent-kafka>=2.3.0",
+    "pyiceberg[sql-sqlite,sql-postgres,gcsfs,gcp-auth]>=0.7.0",
+    "psycopg2-binary>=2.9.0",
+    "pyarrow>=23.0.1",
+    "google-cloud-logging>=3.14.0",
+]

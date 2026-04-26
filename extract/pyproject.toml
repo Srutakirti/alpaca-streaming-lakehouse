@@ -1,0 +1,10 @@
+[project]
+name = "extract"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "websockets>=16.0",
+    "confluent-kafka>=2.3.0",
+    "google-cloud-secret-manager>=2.26.0",
+    "google-cloud-logging>=3.14.0",
+]
