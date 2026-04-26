@@ -53,7 +53,7 @@ cd terraform && terraform destroy
   synthetic_stock_generator ──► local Docker Tansu ──► subscriber (local) ──► ./warehouse/ (Iceberg sqlite)
 
 [GCP / Phase 2-3]
-  Alpaca WebSocket ──► extract/extractor.py ──► Tansu VM (GCE, s3://GCS) ──► load/subscriber.py ──► Cloud SQL catalog + GCS warehouse
+  Alpaca WebSocket ──► extract/extractor.py ──► Tansu VM (GCE, memory://) ──► load/subscriber.py ──► Cloud SQL catalog + GCS warehouse
 ```
 
 ### Extractor (`extract/extractor.py`)
@@ -95,12 +95,12 @@ Root `terraform/` is the single entry point. It composes 6 modules:
 
 | Module | Purpose |
 |---|---|
-| `warehouse` | GCS buckets (Iceberg warehouse + Tansu s3 storage), HMAC key |
+| `warehouse` | GCS buckets (Iceberg warehouse + Tansu storage bucket) |
 | `catalog` | Cloud SQL Postgres (db-f1-micro), Iceberg database + user, password → Secret Manager |
 | `artifact-registry` | Data source for existing `alpaca-datalake` AR repo |
-| `tansu-broker` | Wraps `tansu_kafka/terraform/modules/{gcp-vm,tansu-install}`; passes HMAC creds for s3:// |
+| `tansu-broker` | Wraps `tansu_kafka/terraform/modules/{gcp-vm,tansu-install}`; `memory://` storage (org policy blocks HMAC key creation) |
 | `extractor-job` | Cloud Run v2 Job for `alpaca-extractor` + SA + IAM |
-| `loader-service` | Cloud Run v2 Service for `alpaca-loader` + Cloud SQL Auth Proxy annotation + SA + IAM |
+| `loader-service` | Cloud Run v2 Service for `alpaca-loader` + Cloud SQL Auth Proxy via `volumes { cloud_sql_instance }` + SA + IAM |
 | `scheduler` | Cloud Scheduler start (08:00 ET) + stop (17:00 ET) jobs, weekdays only |
 
 Phase 2 staging: `terraform apply -target=module.warehouse -target=module.catalog -target=module.artifact_registry -target=module.tansu_broker` then run the loader locally against the cloud resources.
@@ -118,4 +118,8 @@ All code uses the `KAFKA_BROKER` env var; no code changes between environments.
 - `extract/helpers/synthetic_stock_generator.py` is the **local test source** — it's runnable (uses confluent-kafka). Run it against any Tansu instance to generate synthetic bar traffic.
 - Root `main.py` is a uv-init placeholder, not a pipeline entrypoint.
 - The original Pub/Sub topic (`alpaca-bars`) and subscription (`alpaca-bars-sub`) still exist in GCP but are no longer used. Remove them as a separate cleanup task.
-- Deployment commands (Artifact Registry push, Cloud Run execution) and full GCP resource inventory live in `README.md`. The three-phase rollout plan is in `PLAN.md`.
+- Deployment commands (Artifact Registry push, Cloud Run execution) and full GCP resource inventory live in `README.md`. The three-phase rollout plan is in `PLAN.md`. Per-phase decisions and blockers are in `PHASES.md`.
+- **Tansu quirk**: does not auto-create topics. All producers/consumers call `AdminClient.create_topics()` on startup. `producer.list_topics(timeout=10)` is also required to force the TCP handshake before the production loop.
+- **Tansu storage**: uses `memory://` on the GCP VM. The org policy `iam.disableServiceAccountKeyCreation` blocks GCS HMAC key creation, so s3:// backend is unavailable. Iceberg on GCS is the durable store; Tansu is transport only.
+- **Cloud SQL Auth Proxy**: For local Phase 2 testing, download `cloud-sql-proxy` and run `cloud-sql-proxy <connection_name> --port 5432`. The loader's `ICEBERG_CATALOG_URI` then points to `127.0.0.1:5432`. In Cloud Run (Phase 3), the proxy runs as a sidecar via `volumes { cloud_sql_instance }` — the unix socket is at `/cloudsql/<connection_name>`.
+- **IPv6 note**: Laptop is IPv6-only; Cloud SQL `authorized_networks` only accepts IPv4. Use Cloud SQL Auth Proxy for all local access.

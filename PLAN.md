@@ -126,10 +126,10 @@ Goal: extractor and loader running in Cloud Run; one `terraform apply` deploys, 
 ### 3.2 Image build/push script ✅
 - [x] `scripts/build_and_push.sh` builds + pushes both images tagged `v0.1.0` to Artifact Registry.
 
-### 3.3 Documentation
-- [ ] Update `CLAUDE.md`: new Kafka/Iceberg architecture, env vars, three-phase rollout reference.
-- [ ] Update `README.md`: tick remaining TODOs, add final GCP resource table.
-- [ ] **Commit:** `docs: refresh CLAUDE.md and README for kafka+iceberg`
+### 3.3 Documentation ✅
+- [x] Updated `CLAUDE.md`: Tansu memory:// note, Cloud SQL Auth Proxy guidance, IPv6 note, PHASES.md reference.
+- [x] Updated `README.md`: ticked scheduler + Terraform lifecycle TODOs; accurate GCP resource table with real names and IPs.
+- [x] **Commit:** `docs: refresh CLAUDE.md and README for phase-3 deploy`
 
 ### 3.4 Production deploy dry-run ✅ PASSED
 - [x] `bash scripts/build_and_push.sh v0.1.0` → both images in `us-east1-docker.pkg.dev/project-66783f65-9c3e-4880-9a3/alpaca-datalake/`.

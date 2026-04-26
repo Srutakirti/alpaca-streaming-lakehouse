@@ -66,16 +66,15 @@ docker stop tansu && docker rm tansu
 
 | Resource | Name | Notes |
 |---|---|---|
-| GCS Bucket | `<project>-alpaca-iceberg-warehouse` | Iceberg Parquet files |
-| GCS Bucket | `<project>-alpaca-tansu-storage` | Tansu s3:// backend |
-| Cloud SQL | `alpaca-iceberg-catalog` | db-f1-micro Postgres |
-| GCE VM | `tansu-broker` | e2-micro, Ubuntu 24.04 |
+| GCS Bucket | `project-66783f65-9c3e-4880-9a3-alpaca-iceberg-warehouse` | Iceberg Parquet files |
+| GCS Bucket | `project-66783f65-9c3e-4880-9a3-alpaca-tansu-storage` | Reserved (Tansu uses memory://) |
+| Cloud SQL | `alpaca-iceberg-catalog` | db-f1-micro Postgres, us-east1 |
+| GCE VM | `tansu-broker` | e2-micro, Ubuntu 24.04, `35.196.44.0:9092` |
 | Cloud Run Job | `alpaca-extractor` | Alpaca WS → Kafka |
-| Cloud Run Service | `alpaca-loader` | Kafka → Iceberg |
+| Cloud Run Service | `alpaca-loader` | Kafka → Iceberg, min=1 instance |
 | Artifact Registry | `alpaca-datalake` | us-east1 |
-| Secret Manager | `ALPACA_KEY`, `ALPACA_SECRET` | Alpaca credentials |
-| Secret Manager | `ICEBERG_DB_PASSWORD` | Cloud SQL password |
-| Secret Manager | `TANSU_HMAC_SECRET` | GCS HMAC secret for Tansu |
+| Secret Manager | `ALPACA_KEY`, `ALPACA_SECRET` | Alpaca credentials (manually created) |
+| Secret Manager | `ICEBERG_DB_PASSWORD` | Cloud SQL password (Terraform-managed) |
 | Cloud Scheduler | `alpaca-extractor-start` | 08:00 ET weekdays |
 | Cloud Scheduler | `alpaca-extractor-stop` | 17:00 ET weekdays |
 
@@ -168,7 +167,8 @@ df = c.load_table("alpaca.bars").scan().to_arrow().to_pandas()
 
 - [x] Kafka-based pipeline (Pub/Sub replaced)
 - [x] Iceberg sink (GCS Parquet replaced)
-- [x] Cloud Scheduler to stop extractor at 17:00 ET
+- [x] Cloud Scheduler to start extractor at 08:00 ET and stop at 17:00 ET (weekdays)
+- [x] Full Terraform lifecycle (`apply` / `destroy`)
 - [ ] Remove legacy Pub/Sub topic `alpaca-bars` and subscription `alpaca-bars-sub` from GCP
 - [ ] Add day-level Iceberg partitioning on `t` field
 - [ ] Harden `alpaca-extractor-stop` scheduler (cancel running executions via Cloud Function)
