@@ -1,0 +1,10 @@
+project_id  = "project-66783f65-9c3e-4880-9a3"
+region      = "us-east1"
+zone        = "us-east1-b"
+image_tag   = "v0.1.0"
+
+# Override defaults if needed
+# alpaca_symbols   = "AAPL,TSLA,NVDA"
+# batch_size       = 100
+# batch_interval   = 300
+# allow_bucket_destroy = false

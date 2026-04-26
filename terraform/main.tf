@@ -1,0 +1,75 @@
+module "warehouse" {
+  source        = "./modules/warehouse"
+  project_id    = var.project_id
+  region        = var.region
+  allow_destroy = var.allow_bucket_destroy
+}
+
+module "catalog" {
+  source     = "./modules/catalog"
+  project_id = var.project_id
+  region     = var.region
+  # Add your laptop IP here during Phase 2 staging to allow local loader access:
+  # authorized_networks = { "laptop" = "1.2.3.4/32" }
+  authorized_networks = {}
+}
+
+module "artifact_registry" {
+  source        = "./modules/artifact-registry"
+  project_id    = var.project_id
+  location      = var.artifact_registry_location
+  repository_id = var.artifact_registry_repo
+}
+
+module "tansu_broker" {
+  source               = "./modules/tansu-broker"
+  project_id           = var.project_id
+  region               = var.region
+  zone                 = var.zone
+  tansu_storage_bucket = module.warehouse.tansu_storage_bucket
+  s3_access_key_id     = module.warehouse.tansu_hmac_access_key_id
+  s3_secret_access_key = module.warehouse.tansu_hmac_secret
+
+  depends_on = [module.warehouse]
+}
+
+module "extractor_job" {
+  source         = "./modules/extractor-job"
+  project_id     = var.project_id
+  region         = var.region
+  image_base     = module.artifact_registry.image_base
+  image_tag      = var.image_tag
+  kafka_broker   = module.tansu_broker.broker_url
+  kafka_topic    = var.kafka_topic
+  alpaca_symbols = var.alpaca_symbols
+
+  depends_on = [module.tansu_broker]
+}
+
+module "loader_service" {
+  source                            = "./modules/loader-service"
+  project_id                        = var.project_id
+  region                            = var.region
+  image_base                        = module.artifact_registry.image_base
+  image_tag                         = var.image_tag
+  kafka_broker                      = module.tansu_broker.broker_url
+  kafka_topic                       = var.kafka_topic
+  iceberg_catalog_uri               = module.catalog.catalog_uri_cloudsql
+  iceberg_warehouse_bucket          = module.warehouse.iceberg_warehouse_bucket
+  cloudsql_instance_connection_name = module.catalog.instance_connection_name
+  batch_size                        = var.batch_size
+  batch_interval                    = var.batch_interval
+
+  depends_on = [module.catalog, module.tansu_broker]
+}
+
+module "scheduler" {
+  source             = "./modules/scheduler"
+  project_id         = var.project_id
+  region             = var.region
+  extractor_job_name = module.extractor_job.job_name
+  start_schedule     = var.extractor_start_schedule
+  stop_schedule      = var.extractor_stop_schedule
+
+  depends_on = [module.extractor_job]
+}
