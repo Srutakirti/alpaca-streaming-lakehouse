@@ -29,6 +29,7 @@ export default function Visualization() {
   const [symbol, setSymbol] = useState('')
   const [fromDate, setFromDate] = useState(daysAgo(7))
   const [toDate, setToDate] = useState(today())
+  const [uniqueTimestamps, setUniqueTimestamps] = useState(0)
   const chartRef = useRef<HTMLDivElement>(null)
 
   const { data: symbols = [] } = useQuery<string[]>({
@@ -77,13 +78,36 @@ export default function Visualization() {
     })
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } })
 
+    // Deduplicate by unix second (lightweight-charts requires strictly ascending times).
+    // When multiple bars share a timestamp (e.g. synthetic data), merge into one candle.
     const sorted = [...bars].sort((a, b) => a.t.localeCompare(b.t))
-    candleSeries.setData(sorted.map(b => ({
-      time: toUnix(b.t) as any,
+    const byTime = new Map<number, Bar>()
+    for (const b of sorted) {
+      const ts = toUnix(b.t)
+      const existing = byTime.get(ts)
+      if (!existing) {
+        byTime.set(ts, { ...b })
+      } else {
+        existing.h = Math.max(existing.h, b.h)
+        existing.l = Math.min(existing.l, b.l)
+        existing.c = b.c
+        existing.v += b.v
+      }
+    }
+    const deduped = Array.from(byTime.entries()).sort((a, b) => a[0] - b[0])
+
+    setUniqueTimestamps(deduped.length)
+    if (deduped.length < 2) {
+      chart.remove()
+      return
+    }
+
+    candleSeries.setData(deduped.map(([ts, b]) => ({
+      time: ts as any,
       open: b.o, high: b.h, low: b.l, close: b.c,
     })))
-    volSeries.setData(sorted.map(b => ({
-      time: toUnix(b.t) as any,
+    volSeries.setData(deduped.map(([ts, b]) => ({
+      time: ts as any,
       value: b.v,
       color: b.c >= b.o ? '#4ade8044' : '#f8717144',
     })))
@@ -118,6 +142,12 @@ export default function Visualization() {
 
       {bars.length === 0 && !isFetching && symbol && (
         <div className="loading">No bars found for {symbol} in this range.</div>
+      )}
+      {bars.length > 0 && uniqueTimestamps < 2 && !isFetching && (
+        <div className="loading">
+          {bars.length} bar{bars.length !== 1 ? 's' : ''} found but all share the same timestamp —
+          chart requires at least 2 distinct time points. Try a wider date range or use live Alpaca data.
+        </div>
       )}
 
       <div className="section">
