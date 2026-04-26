@@ -29,7 +29,10 @@ resource "google_cloud_run_v2_service" "loader" {
 
   template {
     service_account = google_service_account.loader.email
-    min_instance_count = 1
+
+    scaling {
+      min_instance_count = 1
+    }
 
     containers {
       image = "${var.image_base}/alpaca-loader:${var.image_tag}"

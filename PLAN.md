@@ -92,22 +92,23 @@ Goal: real Tansu VM + Cloud SQL + GCS warehouse stood up via Terraform; loader r
 - [x] **Commit:** `feat(infra): full terraform stack — warehouse, catalog, tansu, cloud run, scheduler`
 
 ### 2.2 Storage modules
-- [x] `terraform/modules/warehouse/`: GCS buckets, HMAC key, Secret Manager.
+- [x] `terraform/modules/warehouse/`: GCS buckets (HMAC key removed — org policy blocks key creation).
 - [x] `terraform/modules/catalog/`: Cloud SQL Postgres, database, password → SM.
 - [x] `terraform/modules/artifact-registry/`: data source for existing `alpaca-datalake` AR repo.
 
 ### 2.3 Tansu broker module
-- [x] `terraform/modules/tansu-broker/`: wraps gcp-vm + tansu-install with HMAC s3 creds.
-- [x] `tansu-install/main.tf`: additive HMAC env-var threading for s3:// backend.
+- [x] `terraform/modules/tansu-broker/`: wraps gcp-vm + tansu-install with `memory://` storage (HMAC blocked by org policy).
+- [x] Note: Tansu uses `memory://` — Iceberg on GCS is the durable store.
 
-### 2.4 Apply staging subset
-- [ ] `cd terraform && terraform init && terraform apply -target=module.warehouse -target=module.catalog -target=module.artifact_registry -target=module.tansu_broker`.
-- [ ] Capture outputs: `broker_ip`, `cloudsql_connection_name`, `cloudsql_public_ip`, warehouse bucket, HMAC creds.
-- [ ] Authorize laptop IP on Cloud SQL instance (or use Cloud SQL Auth Proxy locally).
-- [ ] Run loader locally pointed at cloud: `KAFKA_BROKER=<vm_ip>:9092 ICEBERG_CATALOG_URI="postgresql+psycopg2://iceberg:<pw>@<sql_ip>/iceberg" ICEBERG_WAREHOUSE=gs://alpaca-iceberg-warehouse/ LOG_MODE=both GCP_PROJECT_ID=... uv run --package load python load/subscriber.py`.
-- [ ] Run generator locally with `--kafka <vm_ip>:9092`.
-- [ ] Verify: rows in GCS warehouse, catalog rows in Cloud SQL, Tansu objects in `gs://alpaca-tansu-storage/`, structured logs in Cloud Logging (filter `logName=~"alpaca-(stream|loader)"`).
-- [ ] **Commit:** `chore: phase-2 staging results / config tweaks` (only if fixes needed)
+### 2.4 Apply staging subset ✅ PASSED
+- [x] `cd terraform && terraform init && terraform apply -target=module.warehouse -target=module.catalog -target=module.artifact_registry -target=module.tansu_broker`.
+- [x] Outputs: broker `35.196.44.0:9092`, Cloud SQL `35.237.144.68`, conn name `project-66783f65-9c3e-4880-9a3:us-east1:alpaca-iceberg-catalog`, warehouse `project-66783f65-9c3e-4880-9a3-alpaca-iceberg-warehouse`.
+- [x] Cloud SQL Auth Proxy used for local loader access (laptop is IPv6-only, Cloud SQL authorized_networks requires IPv4).
+- [x] Loader locally: `KAFKA_BROKER=35.196.44.0:9092 ICEBERG_CATALOG_URI=postgresql+psycopg2://iceberg:<pw>@127.0.0.1:5432/iceberg ICEBERG_WAREHOUSE=gs://.../ LOG_MODE=both` — Iceberg table created in Cloud SQL + GCS.
+- [x] Generator → GCP Tansu → local loader: 4 flushes, 204+ records appended, `iceberg_append_errors=0`, `consumer_lag` near zero.
+- [x] GCS warehouse verified: 4 Parquet data files + Iceberg metadata in `gs://project-66783f65-9c3e-4880-9a3-alpaca-iceberg-warehouse/alpaca/bars/`.
+- [x] Structured logs confirmed in Cloud Logging: `component=alpaca-loader`, metrics snapshot with `batches_flushed`, `records_appended`, `consumer_lag`.
+- [x] **Commit:** `chore: phase-2 staging verified — memory:// tansu, cloud sql auth proxy`
 
 ---
 

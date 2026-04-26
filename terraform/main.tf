@@ -6,11 +6,10 @@ module "warehouse" {
 }
 
 module "catalog" {
-  source     = "./modules/catalog"
-  project_id = var.project_id
-  region     = var.region
-  # Add your laptop IP here during Phase 2 staging to allow local loader access:
-  # authorized_networks = { "laptop" = "1.2.3.4/32" }
+  source              = "./modules/catalog"
+  project_id          = var.project_id
+  region              = var.region
+  # Phase 2 local testing: use Cloud SQL Auth Proxy (no authorized_networks needed)
   authorized_networks = {}
 }
 
@@ -22,13 +21,10 @@ module "artifact_registry" {
 }
 
 module "tansu_broker" {
-  source               = "./modules/tansu-broker"
-  project_id           = var.project_id
-  region               = var.region
-  zone                 = var.zone
-  tansu_storage_bucket = module.warehouse.tansu_storage_bucket
-  s3_access_key_id     = module.warehouse.tansu_hmac_access_key_id
-  s3_secret_access_key = module.warehouse.tansu_hmac_secret
+  source     = "./modules/tansu-broker"
+  project_id = var.project_id
+  region     = var.region
+  zone       = var.zone
 
   depends_on = [module.warehouse]
 }
