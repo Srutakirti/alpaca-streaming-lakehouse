@@ -96,19 +96,19 @@ export default function Monitoring() {
       <div className="cards">
         <StatusCard
           label="Extractor"
-          value={status === undefined ? '...' : extConnected ? 'Connected' : 'No data'}
-          colorClass={status === undefined ? 'muted' : extConnected ? 'green' : 'yellow'}
-          sub={ext ? `${ext.messages_sent ?? 0} msgs sent` : undefined}
+          value={status === undefined ? '...' : extConnected ? 'Connected' : 'No GCP logs'}
+          colorClass={status === undefined ? 'muted' : extConnected ? 'green' : 'muted'}
+          sub={ext ? `${ext.messages_sent ?? 0} msgs sent` : 'Set GCP_PROJECT_ID to enable'}
         />
         <StatusCard
           label="Consumer Lag"
-          value={status === undefined ? '...' : loaderLag < 0 ? 'N/A' : String(loaderLag)}
-          colorClass={loaderLag < 0 ? 'muted' : loaderLag === 0 ? 'green' : loaderLag < 100 ? 'yellow' : 'red'}
-          sub={ldr ? `${ldr.batches_flushed ?? 0} batches flushed` : undefined}
+          value={status === undefined ? '...' : ldr === null ? 'No GCP logs' : loaderLag < 0 ? 'N/A' : String(loaderLag)}
+          colorClass={ldr === null ? 'muted' : loaderLag < 0 ? 'muted' : loaderLag === 0 ? 'green' : loaderLag < 100 ? 'yellow' : 'red'}
+          sub={ldr ? `${ldr.batches_flushed ?? 0} batches flushed` : 'Set GCP_PROJECT_ID to enable'}
         />
         <StatusCard
           label="Last Batch"
-          value={status === undefined ? '...' : lastFlushRecords > 0 ? `${lastFlushRecords} rows` : '—'}
+          value={status === undefined ? '...' : ldr === null ? '—' : lastFlushRecords > 0 ? `${lastFlushRecords} rows` : '—'}
           colorClass={lastFlushRecords > 0 ? 'green' : 'muted'}
           sub={lastFlushMs > 0 ? `${lastFlushMs.toFixed(0)} ms` : undefined}
         />
