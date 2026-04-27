@@ -6,9 +6,9 @@ module "warehouse" {
 }
 
 module "catalog" {
-  source              = "./modules/catalog"
-  project_id          = var.project_id
-  region              = var.region
+  source     = "./modules/catalog"
+  project_id = var.project_id
+  region     = var.region
   # Phase 2 local testing: use Cloud SQL Auth Proxy (no authorized_networks needed)
   authorized_networks = {}
 }
@@ -57,6 +57,19 @@ module "loader_service" {
   batch_interval                    = var.batch_interval
 
   depends_on = [module.catalog, module.tansu_broker]
+}
+
+module "frontend_service" {
+  source                            = "./modules/frontend-service"
+  project_id                        = var.project_id
+  region                            = var.region
+  image_base                        = module.artifact_registry.image_base
+  image_tag                         = var.image_tag
+  iceberg_catalog_uri               = module.catalog.catalog_uri_cloudsql
+  iceberg_warehouse_bucket          = module.warehouse.iceberg_warehouse_bucket
+  cloudsql_instance_connection_name = module.catalog.instance_connection_name
+
+  depends_on = [module.catalog, module.warehouse]
 }
 
 module "scheduler" {

@@ -30,6 +30,11 @@ output "loader_service_url" {
   value = module.loader_service.service_url
 }
 
+output "frontend_service_url" {
+  description = "Public URL for the dashboard SPA + API"
+  value       = module.frontend_service.service_url
+}
+
 output "image_base" {
   value = module.artifact_registry.image_base
 }
