@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and push both Docker images to Artifact Registry.
+# Build and push all three Docker images to Artifact Registry.
 # Run from the workspace root before terraform apply.
 #
 # Usage: bash scripts/build_and_push.sh <tag>
@@ -23,11 +23,17 @@ docker build -t "${REGISTRY}/alpaca-extractor:${TAG}" -f extract/Dockerfile .
 echo "==> Building alpaca-loader"
 docker build -t "${REGISTRY}/alpaca-loader:${TAG}" -f load/Dockerfile .
 
+echo "==> Building alpaca-frontend"
+docker build -t "${REGISTRY}/alpaca-frontend:${TAG}" -f frontend/Dockerfile .
+
 echo "==> Pushing alpaca-extractor"
 docker push "${REGISTRY}/alpaca-extractor:${TAG}"
 
 echo "==> Pushing alpaca-loader"
 docker push "${REGISTRY}/alpaca-loader:${TAG}"
+
+echo "==> Pushing alpaca-frontend"
+docker push "${REGISTRY}/alpaca-frontend:${TAG}"
 
 echo ""
 echo "Done. Update terraform.tfvars:"
