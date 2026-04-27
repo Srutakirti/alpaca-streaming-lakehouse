@@ -1,0 +1,12 @@
+**/__pycache__
+**/*.pyc
+**/.venv
+**/node_modules
+frontend/web/dist
+frontend/app/static
+warehouse
+.git
+.terraform
+terraform/.terraform
+terraform/terraform.tfstate*
+tansu_kafka/terraform/terraform.tfstate*
