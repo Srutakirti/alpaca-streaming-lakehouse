@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import { createChart, ColorType, LineStyle, LineSeries } from 'lightweight-charts'
+import { formatUtcChartLabel, formatUtcChartTick, formatUtcTime } from '../lib/time'
 
 interface PipelineStatus {
   extractor: Record<string, unknown> | null
@@ -8,8 +9,24 @@ interface PipelineStatus {
   iceberg: {
     snapshot_count?: number
     latest_snapshot_ts?: number
+    latest_record_t?: string
+    row_count?: number
     error?: string
   }
+}
+
+function dataLagLabel(latestT?: string): { value: string; color: string } {
+  if (!latestT) return { value: '—', color: 'muted' }
+  const lagMs = Date.now() - new Date(latestT).getTime()
+  const sign = lagMs < 0 ? '-' : ''
+  const abs = Math.abs(lagMs)
+  let value: string
+  if (abs < 60_000) value = `${sign}${Math.round(abs / 1000)}s`
+  else if (abs < 3_600_000) value = `${sign}${Math.round(abs / 60_000)}m`
+  else value = `${sign}${(abs / 3_600_000).toFixed(1)}h`
+  // Negative lag = data timestamp in the future (e.g. synthetic generator).
+  const color = lagMs < 0 ? 'yellow' : abs < 120_000 ? 'green' : abs < 600_000 ? 'yellow' : 'red'
+  return { value, color }
 }
 
 interface MetricPoint {
@@ -45,7 +62,12 @@ function LagSparkline({ data }: { data: MetricPoint[] }) {
     const chart = createChart(ref.current, {
       layout: { background: { type: ColorType.Solid, color: '#1a1d27' }, textColor: '#64748b' },
       grid: { vertLines: { color: '#2d3148' }, horzLines: { color: '#2d3148' } },
-      timeScale: { timeVisible: true, secondsVisible: false },
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: false,
+        tickMarkFormatter: (t: number) => formatUtcChartTick(t, false),
+      },
+      localization: { timeFormatter: (t: number) => formatUtcChartLabel(t, false) },
       handleScroll: false,
       handleScale: false,
     })
@@ -88,6 +110,7 @@ export default function Monitoring() {
   const lastFlushRecords = ldr ? Number(ldr.last_flush_records ?? 0) : 0
   const lastFlushMs = ldr ? Number(ldr.last_flush_duration_ms ?? 0) : 0
   const snapshotTs = ice?.latest_snapshot_ts
+  const dataLag = dataLagLabel(ice?.latest_record_t)
 
   return (
     <div>
@@ -119,13 +142,19 @@ export default function Monitoring() {
           sub={ice ? `${ice.snapshot_count ?? 0} snapshots` : undefined}
         />
         <StatusCard
+          label="Data Lag (now − max t)"
+          value={status === undefined ? '...' : dataLag.value}
+          colorClass={dataLag.color}
+          sub={ice?.latest_record_t ? `latest t=${ice.latest_record_t}` : ice?.row_count !== undefined ? `${ice.row_count} rows` : undefined}
+        />
+        <StatusCard
           label="Append Errors"
           value={status === undefined ? '...' : String(ldr?.iceberg_append_errors ?? 0)}
           colorClass={ldr?.iceberg_append_errors ? 'red' : 'green'}
         />
         <StatusCard
           label="Last Commit"
-          value={ldr?.last_commit_ts ? String(ldr.last_commit_ts).slice(11, 19) : '—'}
+          value={ldr?.last_commit_ts ? formatUtcTime(String(ldr.last_commit_ts)) : '—'}
           colorClass="muted"
           sub={ldr?.last_commit_ts ? String(ldr.last_commit_ts).slice(0, 10) : undefined}
         />
