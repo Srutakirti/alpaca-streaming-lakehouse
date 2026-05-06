@@ -39,7 +39,8 @@ resource "google_cloud_run_v2_service" "frontend" {
     service_account = google_service_account.frontend.email
 
     scaling {
-      min_instance_count = 0
+      min_instance_count = 1
+      max_instance_count = 1
     }
 
     volumes {
@@ -55,6 +56,10 @@ resource "google_cloud_run_v2_service" "frontend" {
       env {
         name  = "GCP_PROJECT_ID"
         value = var.project_id
+      }
+      env {
+        name  = "LOG_NAME_EXTRACTOR"
+        value = "alpaca-stream"
       }
       env {
         name  = "ICEBERG_CATALOG_URI"
