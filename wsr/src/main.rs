@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 mod config;
+mod metrics;
 
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
@@ -202,6 +203,32 @@ async fn main() -> anyhow::Result<()> {
         "wsr starting"
     );
 
-    // TODO(checkpoint-7): wire ws + kafka tasks. Smoke check only for now.
+    // Checkpoint 4 smoke: bump counters from a synthetic loop and verify
+    // the emitter task prints snapshots. Will be replaced in Checkpoint 7.
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+    use tokio_util::sync::CancellationToken;
+    let m = metrics::Metrics::new(cfg.component.clone());
+    let shutdown = CancellationToken::new();
+    let (tx, _rx) = tokio::sync::mpsc::channel::<bytes::Bytes>(cfg.channel_capacity);
+    let emitter = metrics::emitter(
+        m.clone(),
+        Duration::from_secs(cfg.metrics_interval_secs),
+        Some(tx.clone()),
+        shutdown.clone(),
+    );
+    m.connection_status.store(true, Ordering::Relaxed);
+    for _ in 0..3 {
+        for _ in 0..50 {
+            m.messages_received.fetch_add(1, Ordering::Relaxed);
+            m.messages_sent.fetch_add(1, Ordering::Relaxed);
+            m.touch_last_message();
+            m.touch_last_delivery();
+        }
+        tokio::time::sleep(Duration::from_secs(cfg.metrics_interval_secs)).await;
+    }
+    shutdown.cancel();
+    let _ = emitter.await;
+    tracing::info!(snapshot = %m.snapshot(), "final metrics");
     Ok(())
 }
