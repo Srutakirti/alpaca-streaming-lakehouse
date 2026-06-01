@@ -52,17 +52,9 @@ async fn main() -> anyhow::Result<()> {
         shutdown.clone(),
     );
 
-    // Ctrl+C cancels the shutdown token, draining the pipeline gracefully.
-    // (SIGTERM handling is added in Checkpoint 7.)
-    {
-        let shutdown = shutdown.clone();
-        tokio::spawn(async move {
-            if tokio::signal::ctrl_c().await.is_ok() {
-                tracing::info!("ctrl-c received; shutting down");
-                shutdown.cancel();
-            }
-        });
-    }
+    // Either Ctrl+C (SIGINT) or SIGTERM (Cloud Run shutdown) cancels the
+    // token, draining the pipeline gracefully.
+    spawn_signal_handler(shutdown.clone());
 
     // The WS retry loop owns the foreground. It returns when the shutdown
     // token fires or a fatal/exhausted error occurs.
@@ -80,4 +72,36 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(snapshot = %metrics.snapshot(), "final metrics");
 
     ws_result.map_err(anyhow::Error::from)
+}
+
+/// Cancel `shutdown` on the first of SIGINT (Ctrl+C) or SIGTERM.
+fn spawn_signal_handler(shutdown: CancellationToken) {
+    tokio::spawn(async move {
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{SignalKind, signal};
+            let mut term = match signal(SignalKind::terminate()) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::error!(error = %e, "failed to install SIGTERM handler");
+                    return;
+                }
+            };
+            tokio::select! {
+                r = tokio::signal::ctrl_c() => {
+                    if r.is_ok() {
+                        tracing::info!("SIGINT received; shutting down");
+                    }
+                }
+                _ = term.recv() => tracing::info!("SIGTERM received; shutting down"),
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            if tokio::signal::ctrl_c().await.is_ok() {
+                tracing::info!("SIGINT received; shutting down");
+            }
+        }
+        shutdown.cancel();
+    });
 }
