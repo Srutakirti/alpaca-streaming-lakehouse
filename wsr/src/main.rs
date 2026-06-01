@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 mod config;
+mod kafka;
 mod metrics;
 
 use futures_util::{SinkExt, StreamExt};
@@ -203,32 +204,55 @@ async fn main() -> anyhow::Result<()> {
         "wsr starting"
     );
 
-    // Checkpoint 4 smoke: bump counters from a synthetic loop and verify
-    // the emitter task prints snapshots. Will be replaced in Checkpoint 7.
-    use std::sync::atomic::Ordering;
+    // Checkpoint 5 smoke: push 10 "hello" payloads through the producer task
+    // and verify they land in Kafka. Replaced in Checkpoint 7.
     use std::time::Duration;
     use tokio_util::sync::CancellationToken;
+    kafka::ensure_topic(&cfg).await?;
     let m = metrics::Metrics::new(cfg.component.clone());
     let shutdown = CancellationToken::new();
-    let (tx, _rx) = tokio::sync::mpsc::channel::<bytes::Bytes>(cfg.channel_capacity);
+    let producer = kafka::build_producer(&cfg)?;
+    kafka::warm_metadata(&producer, &cfg.kafka_topic)?;
+    let (tx, rx) = tokio::sync::mpsc::channel::<bytes::Bytes>(cfg.channel_capacity);
     let emitter = metrics::emitter(
         m.clone(),
         Duration::from_secs(cfg.metrics_interval_secs),
         Some(tx.clone()),
         shutdown.clone(),
     );
-    m.connection_status.store(true, Ordering::Relaxed);
-    for _ in 0..3 {
-        for _ in 0..50 {
-            m.messages_received.fetch_add(1, Ordering::Relaxed);
-            m.messages_sent.fetch_add(1, Ordering::Relaxed);
-            m.touch_last_message();
-            m.touch_last_delivery();
+    let prod_task = kafka::producer_task(
+        producer.clone(),
+        cfg.kafka_topic.clone(),
+        cfg.clone(),
+        m.clone(),
+        rx,
+        shutdown.clone(),
+    );
+    let total: u64 = std::env::var("WSR_SMOKE_COUNT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(10);
+    let delay_ms: u64 = std::env::var("WSR_SMOKE_DELAY_MS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    for i in 0..total {
+        let payload = bytes::Bytes::from(format!(r#"[{{"T":"hello","n":{i}}}]"#));
+        tx.send(payload).await?;
+        m.messages_received
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        m.touch_last_message();
+        if delay_ms > 0 {
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
         }
-        tokio::time::sleep(Duration::from_secs(cfg.metrics_interval_secs)).await;
     }
+    drop(tx);
+    // Give the producer task a moment to drain naturally before forcing shutdown.
+    tokio::time::sleep(Duration::from_millis(500)).await;
     shutdown.cancel();
-    let _ = emitter.await;
+    let _ = tokio::join!(prod_task, emitter);
+    use rdkafka::producer::Producer;
+    producer.flush(Duration::from_secs(10))?;
     tracing::info!(snapshot = %m.snapshot(), "final metrics");
     Ok(())
 }
