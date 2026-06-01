@@ -121,56 +121,56 @@ Each checkpoint is an atomic, committable unit. Status legend: `[ ]` not started
 
 ### Checkpoint 1 — Repo hygiene
 
-- **Status**: `[ ]`
-- **Commit SHA**: _pending_
-- **Commit message**: `chore(wsr): scaffold gitignore, toolchain, remove secrets file`
-- **Files**: create `wsr/.gitignore` (ignore `target/`, `secrets.txt`, `.env`, `*.log`) — **do NOT delete `wsr/secrets.txt`**, just gitignore it; create `wsr/rust-toolchain.toml` (`channel = "1.85"`, components `rustfmt`, `clippy`).
-- **Done when**: `cd wsr && cargo --version` succeeds with the pinned toolchain; `git status` no longer lists `secrets.txt` (the file still exists on disk but is gitignored); `wsr/.gitignore` + `wsr/rust-toolchain.toml` are untracked-but-present.
+- **Status**: `[x]`
+- **Commit SHA**: `c50b4fa`
+- **Commit message**: `chore(wsr): scaffold gitignore, toolchain pin, and implementation plan`
+- **Files**: root `.gitignore` extended with `wsr/target/`, `wsr/secrets.txt`, `wsr/.env`, `*.log` (no separate `wsr/.gitignore`); `wsr/rust-toolchain.toml` pinned to `1.85` with `rustfmt` + `clippy`. `wsr/secrets.txt` kept on disk per user request.
+- **Done when**: ✅ `cargo --version` reports `cargo 1.85.1`; `git check-ignore` confirms `wsr/secrets.txt` and `wsr/target` are ignored; `git status` no longer lists `secrets.txt`.
 
 ### Checkpoint 2 — Dependencies
 
-- **Status**: `[ ]`
-- **Commit SHA**: _pending_
+- **Status**: `[x]`
+- **Commit SHA**: `34bbe49`
 - **Commit message**: `chore(wsr): add tracing, anyhow, thiserror, bytes, tokio-util, chrono, serde-derive`
-- **Files**: `wsr/Cargo.toml` (full block in the Cargo.toml section above).
-- **Done when**: `cd wsr && cargo build` compiles cleanly (slow first time due to vendored librdkafka — install `cmake libssl-dev libsasl2-dev` first if it fails).
+- **Files**: `wsr/Cargo.toml`, `wsr/Cargo.lock`.
+- **Done when**: ✅ `cargo build` finished in 21.87s on the pinned 1.85.1 toolchain.
 
 ### Checkpoint 3 — `Config`
 
-- **Status**: `[ ]`
-- **Commit SHA**: _pending_
-- **Commit message**: `feat(wsr): env-based Config loader`
-- **Files**: `wsr/src/config.rs` (new); `wsr/src/main.rs` (add `mod config;` and a temporary `let cfg = config::Config::from_env()?; tracing::info!(?cfg);` smoke check, gated on `RUST_LOG=debug`).
-- **Done when**: with all required env vars set, `cargo run` prints the loaded `Config`; with `ALPACA_KEY` unset, it errors with a clear `missing env var ALPACA_KEY` message.
+- **Status**: `[x]`
+- **Commit SHA**: `2d2172c`
+- **Commit message**: `feat(wsr): env-based Config loader with secret redaction`
+- **Files**: `wsr/src/config.rs` (new — 13 fields, custom `Debug` impl redacts `alpaca_key` and `alpaca_secret`); `wsr/src/main.rs` (smoke-check `main` that inits tracing JSON, loads config, logs it; old WS retry code kept dormant behind `#![allow(dead_code)]` for migration in Checkpoint 6).
+- **Done when**: ✅ unset `ALPACA_KEY` → exits with `Error: missing env var ALPACA_KEY`; set → JSON-log line `cfg: Config { alpaca_key: "PKCP…<redacted>", alpaca_secret: "<redacted>", … }`.
 
 ### Checkpoint 4 — `Metrics` + emitter task
 
-- **Status**: `[ ]`
-- **Commit SHA**: _pending_
-- **Commit message**: `feat(wsr): lock-free Metrics + JSON snapshot emitter`
-- **Files**: `wsr/src/metrics.rs` (new); `wsr/src/main.rs` (wire up `Metrics::new()`, spawn `metrics::emitter` with a short interval, manually bump counters from a test loop, run for ~30s, confirm snapshots in JSON logs).
-- **Done when**: `cargo run` (with `RUST_LOG=info`) emits one structured JSON log per `metrics_interval_secs` containing the full metrics field set (including `queue_depth`).
+- **Status**: `[x]`
+- **Commit SHA**: `2c3038f`
+- **Commit message**: `feat(wsr): lock-free Metrics + JSON snapshot emitter task`
+- **Files**: `wsr/src/metrics.rs` (new); `wsr/src/main.rs` (scaffold loop bumping counters 3× across the interval).
+- **Done when**: ✅ with `METRICS_INTERVAL=2`, observed 3 periodic `metrics` JSON lines + 1 `final metrics` line, all 8 Python-equivalent fields present plus `queue_depth`/`queue_capacity`, timestamps in RFC3339, `messages_received`/`messages_sent` climbing 50→100→150.
 
 ### Checkpoint 5 — `kafka.rs` (standalone)
 
-- **Status**: `[ ]`
-- **Commit SHA**: _pending_
+- **Status**: `[x]`
+- **Commit SHA**: `c1f3b8e`
 - **Commit message**: `feat(wsr): kafka producer task with FuturesUnordered delivery tracking`
 - **Files**: `wsr/src/kafka.rs` (new). Uses default `ProducerContext` (no custom callback). `producer_task` owns a `FuturesUnordered<DeliveryFuture>`; metrics atomics are updated from the `select!` arm that polls completions. Throwaway test in `wsr/src/main.rs` creates the mpsc channel, spawns `producer_task`, pushes 10 fixed `"hello"` payloads through `tx`, drops `tx` to signal close, awaits the producer task, then logs a final snapshot.
 - **Done when**: Tansu is running locally; `cargo run` produces 10 messages; `scripts/peek_kafka.py --max 10` returns them; the final snapshot shows `messages_sent: 10`, `delivery_failures: 0`. Induce a failure (point at a wrong port) and confirm `delivery_failures` increments and a `tracing::warn!` line appears per failed delivery.
 
 ### Checkpoint 6 — `ws.rs` (typed, channel-based)
 
-- **Status**: `[ ]`
-- **Commit SHA**: _pending_
+- **Status**: `[x]`
+- **Commit SHA**: `d57907e`
 - **Commit message**: `refactor(wsr): typed ws module with backoff + channel-based handoff`
 - **Files**: `wsr/src/ws.rs` (new — receives existing handshake/recv code from current `main.rs:1–161`); strip the old code out of `wsr/src/main.rs`. Replace `serde_json::Value` poking with typed `AuthResp` / `SubResp` / `ErrResp` structs. Split into `setup_ws` + `stream_frames`. Implement `pub async fn run` with `thiserror`-derived `Error { Transient, Fatal }`, exponential backoff (reset on connect), `CancellationToken`, and `mpsc::Sender<Bytes>` outbound. Wrap each attempt in `tracing::info_span!("ws_attempt", attempt)`.
 - **Done when**: `cargo clippy` clean; `cargo run` against Tansu connects, authenticates, subscribes, and sends frames into the channel; the channel-drain test from Checkpoint 5 (kept temporarily as a stub consumer) shows real Alpaca frames flowing through.
 
 ### Checkpoint 7 — `main.rs` orchestrator + graceful shutdown
 
-- **Status**: `[ ]`
-- **Commit SHA**: _pending_
+- **Status**: `[x]`
+- **Commit SHA**: `938ba6b`
 - **Commit message**: `feat(wsr): main orchestrator with graceful shutdown + flush`
 - **Files**: `wsr/src/main.rs` (final form: init tracing JSON, load config, `kafka::ensure_topic`, build `Arc<Metrics>`, build producer, `warm_metadata`, create `CancellationToken`, spawn signal-handler task (`ctrl_c` + `SIGTERM`), spawn `metrics::emitter`, create `mpsc::channel::<Bytes>(cfg.channel_capacity)`, spawn `kafka::producer_task`, `ws::run(...).await`, on return: `token.cancel()` → drop `tx` → `join_all(handles)` → `producer.flush(10s)` → final snapshot log).
 - **Done when**: All verification steps (1–7) in the next section pass.
@@ -181,13 +181,13 @@ Each checkpoint is an atomic, committable unit. Status legend: `[ ]` not started
 
 | # | Checkpoint | Status | Commit |
 |---|---|---|---|
-| 1 | Repo hygiene | `[ ]` | _pending_ |
-| 2 | Dependencies | `[ ]` | _pending_ |
-| 3 | `Config` | `[ ]` | _pending_ |
-| 4 | `Metrics` + emitter | `[ ]` | _pending_ |
-| 5 | `kafka.rs` standalone | `[ ]` | _pending_ |
-| 6 | `ws.rs` typed + channel | `[ ]` | _pending_ |
-| 7 | `main.rs` + shutdown | `[ ]` | _pending_ |
+| 1 | Repo hygiene | `[x]` | `c50b4fa` |
+| 2 | Dependencies | `[x]` | `34bbe49` |
+| 3 | `Config` | `[x]` | `2d2172c` |
+| 4 | `Metrics` + emitter | `[x]` | `2c3038f` |
+| 5 | `kafka.rs` standalone | `[x]` | `c1f3b8e` |
+| 6 | `ws.rs` typed + channel | `[x]` | `d57907e` |
+| 7 | `main.rs` + shutdown | `[x]` | `938ba6b` |
 
 ## Verification
 
