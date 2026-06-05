@@ -1,0 +1,5 @@
+# Keep the build context lean and keep secrets out of image layers.
+target/
+secrets.txt
+.env
+*.log

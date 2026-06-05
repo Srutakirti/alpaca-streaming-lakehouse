@@ -20,6 +20,9 @@ gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 echo "==> Building alpaca-extractor"
 docker build -t "${REGISTRY}/alpaca-extractor:${TAG}" -f extract/Dockerfile .
 
+echo "==> Building alpaca-extractor-rs (Rust producer; context is wsr/)"
+docker build -t "${REGISTRY}/alpaca-extractor-rs:${TAG}" -f wsr/Dockerfile wsr
+
 echo "==> Building alpaca-loader"
 docker build -t "${REGISTRY}/alpaca-loader:${TAG}" -f load/Dockerfile .
 
@@ -28,6 +31,9 @@ docker build -t "${REGISTRY}/alpaca-frontend:${TAG}" -f frontend/Dockerfile .
 
 echo "==> Pushing alpaca-extractor"
 docker push "${REGISTRY}/alpaca-extractor:${TAG}"
+
+echo "==> Pushing alpaca-extractor-rs"
+docker push "${REGISTRY}/alpaca-extractor-rs:${TAG}"
 
 echo "==> Pushing alpaca-loader"
 docker push "${REGISTRY}/alpaca-loader:${TAG}"
