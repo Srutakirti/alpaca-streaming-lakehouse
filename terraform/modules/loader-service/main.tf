@@ -32,6 +32,7 @@ resource "google_cloud_run_v2_service" "loader" {
 
     scaling {
       min_instance_count = 1
+      max_instance_count = 1
     }
 
     volumes {
@@ -100,6 +101,20 @@ resource "google_cloud_run_v2_service" "loader" {
 
       ports {
         container_port = 8080
+      }
+
+      resources {
+        limits = {
+          cpu    = "1000m"
+          memory = "512Mi"
+        }
+        # The loader is a background Kafka consumer: it calls
+        # iceberg_table.append() inside its poll loop, OUTSIDE any HTTP request.
+        # Cloud Run's default request-scoped CPU throttling starves that work
+        # (appends took ~100-150s vs ~60ms with CPU). cpu_idle=false keeps the
+        # CPU allocated for the always-on instance.
+        cpu_idle          = false
+        startup_cpu_boost = true
       }
     }
   }
