@@ -11,6 +11,7 @@ module "catalog" {
   region     = var.region
   # Phase 2 local testing: use Cloud SQL Auth Proxy (no authorized_networks needed)
   authorized_networks = {}
+  allow_destroy       = var.allow_db_destroy
 }
 
 module "artifact_registry" {
@@ -78,7 +79,19 @@ module "scheduler" {
   region             = var.region
   extractor_job_name = module.extractor_job.job_name
   start_schedule     = var.extractor_start_schedule
-  stop_schedule      = var.extractor_stop_schedule
 
   depends_on = [module.extractor_job]
+}
+
+module "probe_job" {
+  source                          = "./modules/probe-job"
+  project_id                      = var.project_id
+  region                          = var.region
+  image_base                      = module.artifact_registry.image_base
+  image_tag                       = var.image_tag
+  alpaca_symbols                  = var.alpaca_symbols
+  service_account_email           = module.extractor_job.service_account_email
+  scheduler_service_account_email = module.scheduler.service_account_email
+
+  depends_on = [module.extractor_job, module.scheduler]
 }

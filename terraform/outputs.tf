@@ -42,7 +42,3 @@ output "image_base" {
 output "scheduler_start" {
   value = module.scheduler.start_job_name
 }
-
-output "scheduler_stop" {
-  value = module.scheduler.stop_job_name
-}

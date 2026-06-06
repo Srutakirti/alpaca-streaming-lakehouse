@@ -15,11 +15,5 @@ variable "extractor_job_name" {
 variable "start_schedule" {
   description = "Cron expression for starting the extractor (America/New_York)"
   type        = string
-  default     = "0 8 * * 1-5"
-}
-
-variable "stop_schedule" {
-  description = "Cron expression for stopping the extractor (America/New_York)"
-  type        = string
-  default     = "0 17 * * 1-5"
+  default     = "30 9 * * 1-5"
 }

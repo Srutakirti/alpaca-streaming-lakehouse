@@ -29,22 +29,7 @@ resource "google_cloud_scheduler_job" "extractor_start" {
   }
 }
 
-resource "google_cloud_scheduler_job" "extractor_stop" {
-  name             = "alpaca-extractor-stop"
-  description      = "Stop the Alpaca extractor at market close (deletes running executions)"
-  schedule         = var.stop_schedule
-  time_zone        = "America/New_York"
-  project          = var.project_id
-  region           = var.region
-  attempt_deadline = "320s"
-
-  http_target {
-    http_method = "GET"
-    # Lists and cancels running executions. Replace with a Cloud Function for production hardening.
-    uri = "https://${var.region}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${var.project_id}/jobs/${var.extractor_job_name}/executions"
-
-    oauth_token {
-      service_account_email = google_service_account.scheduler.email
-    }
-  }
-}
+# No stop scheduler: the extractor self-terminates via its DATA_IDLE_TIMEOUT
+# watchdog ~10 min after bars stop at market close. The previous extractor-stop
+# job only GET-listed executions (never cancelled them), so it never actually
+# stopped anything.

@@ -46,9 +46,9 @@ variable "kafka_topic" {
 }
 
 variable "batch_size" {
-  description = "Number of records per Iceberg flush"
+  description = "Number of records per Iceberg flush. Larger values amortize the per-flush GCS write cost (~25s) over more rows; recommended >=2000 under load."
   type        = number
-  default     = 100
+  default     = 2000
 }
 
 variable "batch_interval" {
@@ -63,14 +63,22 @@ variable "allow_bucket_destroy" {
   default     = false
 }
 
-variable "extractor_start_schedule" {
-  description = "Cloud Scheduler cron for starting the extractor (America/New_York)"
-  type        = string
-  default     = "0 8 * * 1-5"
+variable "allow_db_destroy" {
+  description = "Set to true to allow terraform destroy to delete the Cloud SQL catalog instance (default: protected via deletion_protection)"
+  type        = bool
+  default     = false
 }
 
-variable "extractor_stop_schedule" {
-  description = "Cloud Scheduler cron for stopping the extractor (America/New_York)"
+variable "extractor_start_schedule" {
+  # 09:30 ET = market open. Probe data shows the first bar lands at 09:31 ET
+  # every trading day; the extractor boots + subscribes in ~30-45s, so it is
+  # ready before the first bar. (Was 08:00 ET, which idled 90 min and collided
+  # with the 08:00 ET probe over Alpaca's single-connection limit.)
+  description = "Cloud Scheduler cron for starting the extractor (America/New_York)"
   type        = string
-  default     = "0 17 * * 1-5"
+  default     = "30 9 * * 1-5"
 }
+
+# No stop schedule: the producer self-terminates via its DATA_IDLE_TIMEOUT
+# watchdog ~10 min after bars stop at market close. The old extractor-stop job
+# was a no-op anyway (it only GET-listed executions, never cancelled them).
