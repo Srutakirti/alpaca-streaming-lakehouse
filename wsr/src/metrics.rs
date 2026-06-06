@@ -68,6 +68,49 @@ fn iso(ms: i64) -> Value {
     }
 }
 
+/// Exit the producer (by cancelling `shutdown`) when no *bar* message has been
+/// received within `idle`. Only data frames count — `touch_last_message` is
+/// called for Text/Binary frames, never for ping/pong keepalives — so this is
+/// the thing that stops the producer from holding the single Alpaca connection
+/// open all weekend once the market closes and only keepalives flow.
+///
+/// Until the first bar arrives, the process start time is the baseline, so a run
+/// launched on a closed market (holiday, off-hours) also exits after `idle`.
+pub fn watchdog(
+    metrics: Arc<Metrics>,
+    idle: Duration,
+    shutdown: CancellationToken,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let start_ms = now_ms();
+        let idle_ms = idle.as_millis() as i64;
+        // Poll several times per window so we react within ~idle/6, but never
+        // busier than every 5s for short windows.
+        let tick = (idle / 6).max(Duration::from_secs(5));
+        let mut ticker = tokio::time::interval(tick);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        ticker.tick().await; // skip the immediate first tick
+        loop {
+            tokio::select! {
+                _ = ticker.tick() => {
+                    let last = metrics.last_message_ts.load(Ordering::Relaxed);
+                    let baseline = if last == 0 { start_ms } else { last };
+                    if now_ms() - baseline >= idle_ms {
+                        tracing::warn!(
+                            idle_secs = idle.as_secs(),
+                            last_message_ts = %iso(last),
+                            "no bar data within idle window; shutting down producer"
+                        );
+                        shutdown.cancel();
+                        break;
+                    }
+                }
+                _ = shutdown.cancelled() => break,
+            }
+        }
+    })
+}
+
 pub fn emitter<T: Send + 'static>(
     metrics: Arc<Metrics>,
     interval: Duration,
@@ -75,11 +118,13 @@ pub fn emitter<T: Send + 'static>(
     shutdown: CancellationToken,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
+        //ticker just yeilds when the time interval is done, first tick is done immediately
         let mut ticker = tokio::time::interval(interval);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         // Skip the immediate first tick so the first emission happens after `interval`.
         ticker.tick().await;
         loop {
+            //tokio polls both ticker and shutdown futures  and proceeds on whichever resolves first.
             tokio::select! {
                 _ = ticker.tick() => {
                     let mut snap = metrics.snapshot();

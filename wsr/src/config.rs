@@ -12,6 +12,7 @@ pub struct Config {
     pub metrics_interval_secs: u64,
     pub max_retries: u32,
     pub timeout_secs: u64,
+    pub data_idle_timeout_secs: u64,
     pub backoff_max_secs: u64,
     pub channel_capacity: usize,
     pub max_inflight: usize,
@@ -34,6 +35,12 @@ impl Config {
             metrics_interval_secs: opt_parse("METRICS_INTERVAL", 10)?,
             max_retries: opt_parse("MAX_RETRIES", 5)?,
             timeout_secs: opt_parse("TIMEOUT", 120)?,
+            // No *bar* data within this window (ping/pong don't count) → the
+            // producer exits so it stops holding the single Alpaca connection.
+            // 0 disables the watchdog. Default 600s (10 min): liquid symbols
+            // emit 1-min bars continuously during market hours, so a 10-min gap
+            // means the market is closed (or the feed is dead).
+            data_idle_timeout_secs: opt_parse("DATA_IDLE_TIMEOUT", 600)?,
             backoff_max_secs: opt_parse("BACKOFF_MAX", 120)?,
             channel_capacity: opt_parse("CHANNEL_CAPACITY", 1024)?,
             max_inflight: opt_parse("MAX_INFLIGHT", 512)?,
@@ -54,6 +61,7 @@ impl fmt::Debug for Config {
             .field("metrics_interval_secs", &self.metrics_interval_secs)
             .field("max_retries", &self.max_retries)
             .field("timeout_secs", &self.timeout_secs)
+            .field("data_idle_timeout_secs", &self.data_idle_timeout_secs)
             .field("backoff_max_secs", &self.backoff_max_secs)
             .field("channel_capacity", &self.channel_capacity)
             .field("max_inflight", &self.max_inflight)

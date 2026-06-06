@@ -52,6 +52,17 @@ async fn main() -> anyhow::Result<()> {
         shutdown.clone(),
     );
 
+    // Self-terminate if no bars arrive within the idle window (market closed /
+    // dead feed). Ping/pong keepalives do not reset it. DATA_IDLE_TIMEOUT=0
+    // disables. Returns an Option<JoinHandle> so teardown can join it.
+    let watchdog = (cfg.data_idle_timeout_secs > 0).then(|| {
+        metrics::watchdog(
+            metrics.clone(),
+            Duration::from_secs(cfg.data_idle_timeout_secs),
+            shutdown.clone(),
+        )
+    });
+
     // Either Ctrl+C (SIGINT) or SIGTERM (Cloud Run shutdown) cancels the
     // token, draining the pipeline gracefully.
     spawn_signal_handler(shutdown.clone());
@@ -68,6 +79,9 @@ async fn main() -> anyhow::Result<()> {
     shutdown.cancel();
     drop(tx);
     let _ = tokio::join!(prod_task, emitter);
+    if let Some(watchdog) = watchdog {
+        let _ = watchdog.await;
+    }
     producer.flush(Duration::from_secs(10))?;
     tracing::info!(snapshot = %metrics.snapshot(), "final metrics");
 
