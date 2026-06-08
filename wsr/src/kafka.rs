@@ -37,6 +37,7 @@ pub async fn ensure_topic(cfg: &Config) -> Result<(), Error> {
     let opts = AdminOptions::new().request_timeout(Some(Duration::from_secs(10)));
     let results = admin.create_topics(&[new_topic], &opts).await?;
     for r in results {
+        //check if topic was created or topic already exists or error happened
         match r {
             Ok(name) => tracing::info!(topic = %name, "topic created"),
             Err((name, RDKafkaErrorCode::TopicAlreadyExists)) => {
