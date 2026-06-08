@@ -5,5 +5,5 @@ RUN pip install uv
 COPY pyproject.toml uv.lock ./
 COPY extract/pyproject.toml extract/
 RUN uv sync --package extract
-COPY extract/extractor.py extract/
+COPY extract/extractor.py extract/probe.py extract/
 CMD ["uv", "run", "--package", "extract", "python", "extract/extractor.py"]

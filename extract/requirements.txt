@@ -1,0 +1,4 @@
+websockets==16.0
+google-cloud-pubsub==2.36.0
+google-cloud-secret-manager==2.26.0
+google-cloud-logging==3.14.0
