@@ -80,6 +80,7 @@ class _Metrics:
         self.messages_sent = 0
         self.errors = 0
         self.last_send_ts: str = ""
+        self.last_bar_t: str = ""  # simulated bar time on the most recent produced message
 
 
 def _delivery_callback(metrics: _Metrics, err, msg):
@@ -96,7 +97,8 @@ def _metrics_emitter(metrics: _Metrics, interval: int, stop: threading.Event, sy
         print(
             f"[{datetime.utcnow().strftime('%H:%M:%S')}] "
             f"sent={metrics.messages_sent} errors={metrics.errors} "
-            f"symbols={','.join(symbols)} last_ts={metrics.last_send_ts}"
+            f"symbols={','.join(symbols)} "
+            f"last_send_ts={metrics.last_send_ts} bar_t={metrics.last_bar_t}"
         )
 
 
@@ -151,6 +153,7 @@ def run(symbols: List[str], kafka_bootstrap: str, topic: str, rate: float, metri
         while not stop.is_set():
             t0 = time.monotonic()
             bars = [simulators[s].get_next_bar(bar_time) for s in symbols]
+            metrics.last_bar_t = bars[-1]["t"]
             bar_time += timedelta(seconds=bar_interval)
             payload = json.dumps(bars).encode("utf-8")
             producer.produce(topic, value=payload, callback=lambda err, msg: _delivery_callback(metrics, err, msg))
