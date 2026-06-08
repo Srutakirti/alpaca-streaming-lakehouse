@@ -4,12 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Real-time data pipeline streaming Alpaca IEX bar data to GCP via **Tansu Kafka** and writing to **Apache Iceberg**. uv workspace with two independent components:
+Real-time data pipeline streaming Alpaca IEX bar data to GCP via **Tansu Kafka** and writing to **Apache Iceberg**. uv workspace with three independent components:
 
 - **extract/** — Cloud Run Job. Connects to Alpaca WebSocket, authenticates via Secret Manager, subscribes to symbols, and produces bar messages to the Tansu Kafka broker.
 - **load/** — Cloud Run Service. Consumes from the Kafka broker, batches records, and appends Parquet to an Iceberg table (Cloud SQL Postgres catalog + GCS warehouse in production; sqlite + local FS for local smoke testing).
+- **frontend/** — Cloud Run Service. FastAPI app (`frontend/app/`) reading the Iceberg table + Cloud Logging for monitoring/visualization, plus a Vite/React UI (`frontend/web/`) built to `frontend/web/dist/` and served as static assets. Image is `alpaca-frontend`; module is `frontend-service`.
 
 `tansu_kafka/` is a separate sub-project (Terraform + test suite for the Tansu/Kafka broker) with its own `CLAUDE.md`. The Tansu broker Terraform module in that directory is reused by the root `terraform/` stack.
+
+`wsr/` is a standalone Rust experiment (Cargo project, edition 2024) — a Rust port of the extractor using `rdkafka` + `tokio-tungstenite` to read the Alpaca WebSocket and produce to Kafka. Not part of the uv workspace, not wired into Terraform/Docker, and not deployed. Treat as exploratory; do not modify unless the user asks. Build with `cargo build` from `wsr/`.
+
+uv workspace, Python ≥3.12; workspace members are `extract`, `load`, `frontend` (see `pyproject.toml`). No automated test suite — smoke-test by running the local extractor (or synthetic generator) + loader against Docker Tansu and inspecting `./warehouse/` with `scripts/query_iceberg.py`.
 
 ## Commands
 
@@ -32,9 +37,18 @@ docker run -d --name tansu -p 9092:9092 ghcr.io/tansu-io/tansu:0.6.0 \
   --kafka-listener-url tcp://0.0.0.0:9092 \
   --kafka-advertised-listener-url tcp://localhost:9092
 
+# Run frontend locally (FastAPI; serves built React dist + JSON APIs)
+# Build the web UI first if dist/ is stale: (cd frontend/web && npm install && npm run build)
+ICEBERG_CATALOG_URI=sqlite:///./warehouse/catalog.db ICEBERG_WAREHOUSE=./warehouse \
+uv run --package frontend python frontend/server.py
+
+# Build the React UI before building the frontend image (dist/ is bundled into the image)
+(cd frontend/web && npm install && npm run build)
+
 # Build Docker images — MUST be from workspace root.
 docker build -t alpaca-extractor -f extract/Dockerfile .
 docker build -t alpaca-loader    -f load/Dockerfile    .
+docker build -t alpaca-frontend  -f frontend/Dockerfile .
 
 # Build + push to Artifact Registry (run before terraform apply)
 bash scripts/build_and_push.sh v0.1.0
@@ -102,6 +116,8 @@ Root `terraform/` is the single entry point. It composes 6 modules:
 | `extractor-job` | Cloud Run v2 Job for `alpaca-extractor` + SA + IAM |
 | `loader-service` | Cloud Run v2 Service for `alpaca-loader` + Cloud SQL Auth Proxy via `volumes { cloud_sql_instance }` + SA + IAM |
 | `scheduler` | Cloud Scheduler start (08:00 ET) + stop (17:00 ET) jobs, weekdays only |
+| `frontend-service` | Cloud Run v2 Service for `alpaca-frontend` (read-only Iceberg + Cloud Logging access) |
+| `probe-job` | Cloud Run v2 Job (`alpaca-probe`) + Cloud Scheduler triggers that run `extract/probe.py` to record when Alpaca first emits bars each day. Reuses the `alpaca-extractor` image with a different entrypoint. Does not produce to Kafka. |
 
 Phase 2 staging: `terraform apply -target=module.warehouse -target=module.catalog -target=module.artifact_registry -target=module.tansu_broker` then run the loader locally against the cloud resources.
 
@@ -118,7 +134,10 @@ All code uses the `KAFKA_BROKER` env var; no code changes between environments.
 - `extract/helpers/synthetic_stock_generator.py` is the **local test source** — it's runnable (uses confluent-kafka). Run it against any Tansu instance to generate synthetic bar traffic.
 - Root `main.py` is a uv-init placeholder, not a pipeline entrypoint.
 - The original Pub/Sub topic (`alpaca-bars`) and subscription (`alpaca-bars-sub`) still exist in GCP but are no longer used. Remove them as a separate cleanup task.
-- Deployment commands (Artifact Registry push, Cloud Run execution) and full GCP resource inventory live in `README.md`. The three-phase rollout plan is in `PLAN.md`. Per-phase decisions and blockers are in `PHASES.md`.
+- Deployment commands (Artifact Registry push, Cloud Run execution) and full GCP resource inventory live in `README.md`. The three-phase rollout plan is in `PLAN.md`. Per-phase decisions and blockers are in `PHASES.md`. Stage B (cloud rollout) summary is in `STAGE_B_DEPLOY.md`.
+- `scripts/query_iceberg.py` and `scripts/compact_iceberg.py` are operator utilities for inspecting and compacting the Iceberg table; they read the same `ICEBERG_CATALOG_URI` / `ICEBERG_WAREHOUSE` env vars as the loader. `scripts/peek_kafka.py` taps the Kafka topic for live debugging; `scripts/inspect_frontend_api.py` hits the deployed frontend's JSON endpoints for validation.
+- Operational runbooks live in `docs/runbooks/` (e.g., `loader-catalog-warehouse-drift.md`). Add a runbook whenever a recovery procedure required >1 manual step.
+- `extract/probe.py` is the observational probe deployed by the `probe-job` Terraform module — it logs a single structured `probe_result` to Cloud Logging on exit and never writes to Kafka.
 - **Tansu quirk**: does not auto-create topics. All producers/consumers call `AdminClient.create_topics()` on startup. `producer.list_topics(timeout=10)` is also required to force the TCP handshake before the production loop.
 - **Tansu storage**: uses `memory://` on the GCP VM. The org policy `iam.disableServiceAccountKeyCreation` blocks GCS HMAC key creation, so s3:// backend is unavailable. Iceberg on GCS is the durable store; Tansu is transport only.
 - **Cloud SQL Auth Proxy**: For local Phase 2 testing, download `cloud-sql-proxy` and run `cloud-sql-proxy <connection_name> --port 5432`. The loader's `ICEBERG_CATALOG_URI` then points to `127.0.0.1:5432`. In Cloud Run (Phase 3), the proxy runs as a sidecar via `volumes { cloud_sql_instance }` — the unix socket is at `/cloudsql/<connection_name>`.
