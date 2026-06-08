@@ -14,3 +14,14 @@ wsr/target/
 wsr/secrets.txt
 wsr/.env
 *.log
+
+# Terraform — state holds secrets; never commit it. Per-env vars + provider cache too.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+
+# Local scratch / personal notes
+my_notes.txt
+local_coomands.txt
