@@ -10,13 +10,24 @@ def _iceberg_freshness() -> dict:
     try:
         table = get_table()
         snapshots = table.metadata.snapshots
-        if not snapshots:
-            return {"snapshot_count": 0, "latest_snapshot_ts": None}
-        latest = max(snapshots, key=lambda s: s.timestamp_ms)
-        return {
-            "snapshot_count": len(snapshots),
-            "latest_snapshot_ts": latest.timestamp_ms,
-        }
+        result: dict = {"snapshot_count": len(snapshots) if snapshots else 0}
+        if snapshots:
+            latest = max(snapshots, key=lambda s: s.timestamp_ms)
+            result["latest_snapshot_ts"] = latest.timestamp_ms
+        else:
+            result["latest_snapshot_ts"] = None
+
+        # max(t) over the data — end-to-end freshness vs. simulated/source clock.
+        # TODO: for large warehouses, read manifest upper-bounds instead of scanning.
+        try:
+            arrow = table.scan(selected_fields=("t",)).to_arrow()
+            if len(arrow) > 0:
+                import pyarrow.compute as pc
+                result["latest_record_t"] = pc.max(arrow.column("t")).as_py()
+                result["row_count"] = len(arrow)
+        except Exception as e:
+            result["latest_record_t_error"] = str(e)
+        return result
     except Exception as e:
         return {"error": str(e)}
 
