@@ -32,7 +32,7 @@ resource "google_sql_database_instance" "catalog" {
     }
   }
 
-  deletion_protection = false
+  deletion_protection = !var.allow_destroy
 }
 
 resource "google_sql_database" "iceberg" {

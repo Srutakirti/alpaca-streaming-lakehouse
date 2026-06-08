@@ -12,3 +12,9 @@ variable "authorized_networks" {
   type        = map(string)
   default     = {}
 }
+
+variable "allow_destroy" {
+  description = "Allow terraform destroy to delete the Cloud SQL instance (default: protected)"
+  type        = bool
+  default     = false
+}
