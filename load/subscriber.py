@@ -60,6 +60,26 @@ ICEBERG_TABLE_SCHEMA = IcebergSchema(
 )
 
 
+# Iceberg schema field names, in order. Projection is derived from the schema so
+# adding a field to PYARROW_SCHEMA automatically flows into project_frame().
+SCHEMA_FIELDS = PYARROW_SCHEMA.names
+
+
+def project_frame(batch: list) -> list:
+    """Project a decoded Kafka frame onto the Iceberg schema.
+
+    A frame is a JSON array of Alpaca bar objects. Each bar is reduced to the 8
+    schema fields (T,S,o,h,l,c,v,t); extra Alpaca fields are dropped and any
+    missing schema field becomes None.
+    """
+    return [{k: bar.get(k) for k in SCHEMA_FIELDS} for bar in batch]
+
+
+def should_flush(num_records: int, elapsed: float, batch_size: int, batch_interval: float) -> bool:
+    """Whether to flush: batch is full, or the interval elapsed with records buffered."""
+    return num_records >= batch_size or (elapsed >= batch_interval and num_records > 0)
+
+
 def setup_logging(name: str, mode: str = "stdout", level: str = "INFO") -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(level)
@@ -239,14 +259,13 @@ def main():
             else:
                 try:
                     batch = json.loads(msg.value().decode("utf-8"))
-                    for bar in batch:
-                        records.append({k: bar.get(k) for k in ["T", "S", "o", "h", "l", "c", "v", "t"]})
+                    records.extend(project_frame(batch))
                     metrics.messages_consumed += 1
                 except Exception as e:
                     logger.error(f"Failed to parse message: {e}")
 
             elapsed = time.monotonic() - last_flush
-            if len(records) >= BATCH_SIZE or (elapsed >= BATCH_INTERVAL and records):
+            if should_flush(len(records), elapsed, BATCH_SIZE, BATCH_INTERVAL):
                 if flush(records, iceberg_table, metrics, logger):
                     consumer.commit(asynchronous=False)
                     metrics.last_commit_ts = datetime.now(timezone.utc).isoformat()
