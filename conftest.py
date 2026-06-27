@@ -12,6 +12,32 @@ from typing import Callable
 
 import pytest
 
+# Run tests in a deterministic, logical order that follows the pipeline's data
+# flow: harness sanity first, then a frame's journey (project -> decide flush ->
+# flush -> metrics), then the same wired to a real broker, then the frontend API,
+# then the full end-to-end. Files not listed keep their collected position at the
+# end. Within a file, definition order is preserved (the sort below is stable).
+_RUN_ORDER = (
+    "test_scaffolding",         # test harness itself
+    "test_projection",          # frame -> schema-projected records
+    "test_should_flush",        # batching decision
+    "test_flush",               # batch -> Iceberg append
+    "test_metrics",             # metrics snapshot
+    "test_consume_integration", # Kafka -> loader -> Iceberg (integration)
+    "test_api",                 # frontend JSON API (Phase 3)
+    "test_pipeline_e2e",        # full pipeline end-to-end (Phase 5)
+)
+
+
+def pytest_collection_modifyitems(items: list) -> None:
+    def rank(item) -> int:
+        for i, key in enumerate(_RUN_ORDER):
+            if key in item.nodeid:
+                return i
+        return len(_RUN_ORDER)
+
+    items.sort(key=rank)
+
 # The 8 fields of the Alpaca bar frame == the Iceberg schema (T,S,o,h,l,c,v,t).
 ALPACA_FIELDS = ["T", "S", "o", "h", "l", "c", "v", "t"]
 
