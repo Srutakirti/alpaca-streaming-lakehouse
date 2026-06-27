@@ -207,6 +207,48 @@ def flush(records: list, iceberg_table, metrics: _Metrics, logger: logging.Logge
         return False
 
 
+def run_consumer(consumer, iceberg_table, metrics: _Metrics, logger: logging.Logger,
+                 stop: threading.Event, batch_size: int = BATCH_SIZE,
+                 batch_interval: int = BATCH_INTERVAL) -> None:
+    """Poll the consumer and append batches to Iceberg until `stop` is set.
+
+    At-least-once delivery: offsets are committed only after a successful append.
+    Does not close the consumer — the caller owns its lifecycle.
+    """
+    records: list = []
+    last_flush = time.monotonic()
+
+    try:
+        while not stop.is_set():
+            msg = consumer.poll(1.0)
+
+            if msg is None:
+                pass
+            elif msg.error():
+                if msg.error().code() != KafkaError._PARTITION_EOF:
+                    logger.error(f"Kafka error: {msg.error()}")
+            else:
+                try:
+                    batch = json.loads(msg.value().decode("utf-8"))
+                    records.extend(project_frame(batch))
+                    metrics.messages_consumed += 1
+                except Exception as e:
+                    logger.error(f"Failed to parse message: {e}")
+
+            elapsed = time.monotonic() - last_flush
+            if should_flush(len(records), elapsed, batch_size, batch_interval):
+                if flush(records, iceberg_table, metrics, logger):
+                    consumer.commit(asynchronous=False)
+                    metrics.last_commit_ts = datetime.now(timezone.utc).isoformat()
+                    records = []
+                    last_flush = time.monotonic()
+
+    finally:
+        if records:
+            if flush(records, iceberg_table, metrics, logger):
+                consumer.commit(asynchronous=False)
+
+
 def main():
     logger = setup_logging(LOG_NAME, LOG_MODE, LOG_LEVEL)
     start_health_server()
@@ -244,38 +286,9 @@ def main():
     signal.signal(signal.SIGTERM, handle_shutdown)
     signal.signal(signal.SIGINT, handle_shutdown)
 
-    records: list = []
-    last_flush = time.monotonic()
-
     try:
-        while not stop.is_set():
-            msg = consumer.poll(1.0)
-
-            if msg is None:
-                pass
-            elif msg.error():
-                if msg.error().code() != KafkaError._PARTITION_EOF:
-                    logger.error(f"Kafka error: {msg.error()}")
-            else:
-                try:
-                    batch = json.loads(msg.value().decode("utf-8"))
-                    records.extend(project_frame(batch))
-                    metrics.messages_consumed += 1
-                except Exception as e:
-                    logger.error(f"Failed to parse message: {e}")
-
-            elapsed = time.monotonic() - last_flush
-            if should_flush(len(records), elapsed, BATCH_SIZE, BATCH_INTERVAL):
-                if flush(records, iceberg_table, metrics, logger):
-                    consumer.commit(asynchronous=False)
-                    metrics.last_commit_ts = datetime.now(timezone.utc).isoformat()
-                    records = []
-                    last_flush = time.monotonic()
-
+        run_consumer(consumer, iceberg_table, metrics, logger, stop)
     finally:
-        if records:
-            if flush(records, iceberg_table, metrics, logger):
-                consumer.commit(asynchronous=False)
         stop.set()
         consumer.close()
         logger.info(f"Final metrics: {metrics.snapshot()}")
