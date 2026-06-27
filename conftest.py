@@ -68,6 +68,11 @@ def _make_bar(
 
 
 @pytest.fixture
+def alpaca_fields() -> list:
+    return list(ALPACA_FIELDS)
+
+
+@pytest.fixture
 def make_bar() -> Callable[..., dict]:
     return _make_bar
 
