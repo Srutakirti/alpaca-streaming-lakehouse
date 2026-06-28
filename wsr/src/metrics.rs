@@ -144,3 +144,49 @@ pub fn emitter<T: Send + 'static>(
         }
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fresh_snapshot_has_defaults() {
+        let m = Metrics::new("alpaca-extractor-rs");
+        let s = m.snapshot();
+        assert_eq!(s["component"], "alpaca-extractor-rs");
+        assert_eq!(s["messages_received"], 0);
+        assert_eq!(s["messages_sent"], 0);
+        assert_eq!(s["delivery_failures"], 0);
+        assert_eq!(s["errors"], 0);
+        assert_eq!(s["connection_status"], false);
+        assert!(s["last_message_ts"].is_null());
+        assert!(s["last_delivery_ts"].is_null());
+    }
+
+    #[test]
+    fn snapshot_reflects_atomic_updates() {
+        let m = Metrics::new("wsr-test");
+        m.messages_received.fetch_add(3, Ordering::Relaxed);
+        m.messages_sent.fetch_add(2, Ordering::Relaxed);
+        m.delivery_failures.fetch_add(1, Ordering::Relaxed);
+        m.connection_status.store(true, Ordering::Relaxed);
+        m.touch_last_message();
+
+        let s = m.snapshot();
+        assert_eq!(s["messages_received"], 3);
+        assert_eq!(s["messages_sent"], 2);
+        assert_eq!(s["delivery_failures"], 1);
+        assert_eq!(s["connection_status"], true);
+        // touch_last_message wrote a real timestamp -> rendered as an ISO string.
+        assert!(s["last_message_ts"].is_string());
+        assert!(s["last_delivery_ts"].is_null()); // never touched
+    }
+
+    #[test]
+    fn iso_renders_zero_as_null_and_nonzero_as_string() {
+        assert!(iso(0).is_null());
+        let v = iso(1_700_000_000_000);
+        assert!(v.is_string());
+        assert!(v.as_str().unwrap().contains("2023")); // 2023-11-14T...
+    }
+}

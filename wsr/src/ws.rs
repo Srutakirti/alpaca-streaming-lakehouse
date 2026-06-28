@@ -162,6 +162,38 @@ async fn setup_ws(cfg: &Config) -> Result<(WsWriter, WsReader), Error> {
     Ok((write, read))
 }
 
+/// How a control frame matched the expected type/msg. Kept separate from IO so
+/// the handshake decision logic is unit-testable without a socket.
+#[derive(Debug, PartialEq, Eq)]
+enum FrameClass {
+    /// Frame is the expected type (and msg, if required).
+    Match,
+    /// Server `error` frame — bad credentials / config; aborts the retry loop.
+    Fatal(String),
+    /// Wrong type or msg — a transient handshake hiccup; reconnect.
+    Mismatch(String),
+}
+
+/// Classify a parsed control frame against the expected type/msg. A server
+/// `error` frame is `Fatal`; a type or msg mismatch is `Mismatch`.
+fn classify_frame(frame: &ControlFrame, want_type: &str, want_msg: Option<&str>) -> FrameClass {
+    if frame.typ == "error" {
+        let code = frame.code.unwrap_or(-1);
+        let m = frame.msg.clone().unwrap_or_default();
+        return FrameClass::Fatal(format!("server error {code}: {m}"));
+    }
+    if frame.typ != want_type {
+        return FrameClass::Mismatch(format!("expected T={want_type}, got T={}", frame.typ));
+    }
+    if let Some(expected) = want_msg {
+        let got = frame.msg.as_deref().unwrap_or("");
+        if got != expected {
+            return FrameClass::Mismatch(format!("expected msg={expected}, got msg={got}"));
+        }
+    }
+    FrameClass::Match
+}
+
 /// Await one control frame of the expected type within `to`. A server `error`
 /// frame is classified `Fatal` (bad credentials / config); a type/msg mismatch
 /// or any IO problem is `Transient`.
@@ -175,26 +207,11 @@ async fn expect(
         .await
         .map_err(|_| Error::Transient(format!("timed out waiting for {want_type}")))??;
 
-    if frame.typ == "error" {
-        let code = frame.code.unwrap_or(-1);
-        let m = frame.msg.unwrap_or_default();
-        return Err(Error::Fatal(format!("server error {code}: {m}")));
+    match classify_frame(&frame, want_type, want_msg) {
+        FrameClass::Match => Ok(frame),
+        FrameClass::Fatal(m) => Err(Error::Fatal(m)),
+        FrameClass::Mismatch(m) => Err(Error::Transient(m)),
     }
-    if frame.typ != want_type {
-        return Err(Error::Transient(format!(
-            "expected T={want_type}, got T={}",
-            frame.typ
-        )));
-    }
-    if let Some(expected) = want_msg {
-        let got = frame.msg.as_deref().unwrap_or("");
-        if got != expected {
-            return Err(Error::Transient(format!(
-                "expected msg={expected}, got msg={got}"
-            )));
-        }
-    }
-    Ok(frame)
 }
 
 /// Read the next text frame and parse the first element as a `ControlFrame`.
@@ -284,4 +301,87 @@ async fn forward(
     tx.send(bytes)
         .await
         .map_err(|_| Error::Fatal("producer channel closed".into()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Parse a single Alpaca control object (as `next_control` does per element).
+    fn parse(s: &str) -> ControlFrame {
+        serde_json::from_str(s).expect("valid control frame json")
+    }
+
+    #[test]
+    fn connected_greeting_matches() {
+        let f = parse(r#"{"T":"success","msg":"connected"}"#);
+        assert_eq!(
+            classify_frame(&f, "success", Some("connected")),
+            FrameClass::Match
+        );
+    }
+
+    #[test]
+    fn authenticated_matches() {
+        let f = parse(r#"{"T":"success","msg":"authenticated"}"#);
+        assert_eq!(
+            classify_frame(&f, "success", Some("authenticated")),
+            FrameClass::Match
+        );
+    }
+
+    #[test]
+    fn subscription_matches_when_msg_not_required() {
+        let f = parse(r#"{"T":"subscription","bars":["AAPL","TSLA"]}"#);
+        assert_eq!(classify_frame(&f, "subscription", None), FrameClass::Match);
+    }
+
+    #[test]
+    fn error_frame_is_fatal_with_code_and_msg() {
+        let f = parse(r#"{"T":"error","code":402,"msg":"auth failed"}"#);
+        match classify_frame(&f, "success", Some("authenticated")) {
+            FrameClass::Fatal(m) => {
+                assert!(m.contains("402"), "got: {m}");
+                assert!(m.contains("auth failed"), "got: {m}");
+            }
+            other => panic!("expected Fatal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn error_frame_without_code_defaults_to_minus_one() {
+        let f = parse(r#"{"T":"error","msg":"bad"}"#);
+        match classify_frame(&f, "success", None) {
+            FrameClass::Fatal(m) => assert!(m.contains("-1"), "got: {m}"),
+            other => panic!("expected Fatal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn wrong_type_is_mismatch() {
+        let f = parse(r#"{"T":"subscription"}"#);
+        assert!(matches!(
+            classify_frame(&f, "success", Some("authenticated")),
+            FrameClass::Mismatch(_)
+        ));
+    }
+
+    #[test]
+    fn right_type_wrong_msg_is_mismatch() {
+        let f = parse(r#"{"T":"success","msg":"connected"}"#);
+        assert!(matches!(
+            classify_frame(&f, "success", Some("authenticated")),
+            FrameClass::Mismatch(_)
+        ));
+    }
+
+    #[test]
+    fn data_bar_during_handshake_is_mismatch() {
+        // A bar frame (T="b", extra fields) where a control frame was expected.
+        let f = parse(r#"{"T":"b","S":"AAPL","o":1.0,"c":1.5}"#);
+        assert!(matches!(
+            classify_frame(&f, "success", Some("connected")),
+            FrameClass::Mismatch(_)
+        ));
+    }
 }
