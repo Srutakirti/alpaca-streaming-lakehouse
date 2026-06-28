@@ -38,21 +38,21 @@ The Rust extractor itself is covered by unit tests plus a documented real-cred s
 
 ## Progress
 
-| Phase | Status | Notes |
+| Phase | Status | Commit |
 |---|---|---|
-| 0 — scaffolding | ✅ done | `e6091de` |
-| 1 — loader units | ✅ done | `f52e5c3` |
-| 2 — loader integration | ✅ done | `b924499` |
-| (logical run order) | ✅ done | `c08d58a` — pipeline-flow ordering hook |
-| 3 — frontend API | ✅ done | `d45ca10` |
-| 4 — Rust extractor | ✅ done | `faf3b71` |
+| 0 — scaffolding | ✅ done | `52d1f43` |
+| 1 — loader units | ✅ done | `af4d1cd` |
+| 2 — loader integration | ✅ done | `8feb497` |
+| (logical run order) | ✅ done | `60c9069` — pipeline-flow ordering hook |
+| 3 — frontend API | ✅ done | `dfda24f` |
+| 4 — Rust extractor | ✅ done | `fceec76` |
 | 5 — local e2e orchestration | ⬜ todo | |
 | 6 — cloud deploy of `wsr/` | ⬜ todo | after local green |
 
 **Test counts:** 42 Python unit pass by default (`uv run pytest`), 44 with integration
-(`-m ''`, Tansu up); 18 Rust unit pass (`cd wsr && cargo test`). Docs:
-`docs/testing/phase-0-1-loader-tests.md`, `phase-3-frontend-tests.md`,
-`phase-4-rust-extractor-tests.md`.
+(`-m ''`, Tansu up); 18 Rust unit pass (`cd wsr && cargo test`). Docs in
+`docs/testing/`: `phase-0-1-loader-tests.md`, `phase-2-loader-integration-tests.md`,
+`phase-3-frontend-tests.md`, `phase-4-rust-extractor-tests.md`.
 
 ---
 
@@ -70,7 +70,7 @@ The Rust extractor itself is covered by unit tests plus a documented real-cred s
       `make_frame`, `alpaca_fields`. `tmp_iceberg` reuses `bootstrap_iceberg()` and
       **monkeypatches the module-level `ICEBERG_*` constants** (bound at import time).
 - [x] Added a smoke test (`tests/test_scaffolding.py`) for the harness itself.
-- [x] **Commit:** `test: add pytest scaffolding, dev deps, fixtures` (`e6091de`)
+- [x] **Commit:** `test: add pytest scaffolding, dev deps, and shared fixtures` (`52d1f43`)
 
 ## Phase 1 — Loader: refactor for testability + unit tests ✅
 
@@ -80,8 +80,8 @@ The Rust extractor itself is covered by unit tests plus a documented real-cred s
 - [x] Left `flush()` / `bootstrap_iceberg()` as-is.
 - [x] Unit tests: `test_projection.py`, `test_should_flush.py` (parametrized truth table),
       `test_flush.py` (append + error path via a fake table), `test_metrics.py`.
-- [x] **Commit:** `test(load): extract pure helpers + unit tests for projection/flush/metrics`
-      (`f52e5c3`)
+- [x] **Commit:** `test(load): extract pure helpers; unit-test projection, flush, metrics`
+      (`af4d1cd`)
 
 ## Phase 2 — Loader: integration test (real Kafka + Iceberg) ✅
 
@@ -91,7 +91,7 @@ The Rust extractor itself is covered by unit tests plus a documented real-cred s
       frames to `$KAFKA_BROKER`, runs the consumer, asserts rows in Iceberg + at-least-once
       offset commit, and that a fresh catalog load sees the committed snapshot.
 - [x] Verified against local Tansu (`docker run … ghcr.io/tansu-io/tansu:0.6.0`).
-- [x] **Commit:** `test(load): kafka->iceberg consume-loop integration test` (`b924499`)
+- [x] **Commit:** `test(load): add kafka-to-iceberg consume-loop integration test` (`8feb497`)
 
 ## Phase 3 — Frontend: Python API tests ✅
 
@@ -103,8 +103,8 @@ The Rust extractor itself is covered by unit tests plus a documented real-cred s
 - [x] Covered all 5 routes incl. `/bars` validation (422s) and `/pipeline/metrics` bounds.
 - [x] Fixed a conftest-name collision by exposing `alpaca_fields` as a fixture (don't
       `import conftest`).
-- [x] **Commit:** `test(frontend): FastAPI route tests against fixture Iceberg + mocked logging`
-      (`d45ca10`)
+- [x] **Commit:** `test(frontend): API route tests over fixture iceberg with mocked logging`
+      (`dfda24f`)
 
 ## Phase 4 — Rust extractor: unit tests ✅
 
@@ -116,7 +116,7 @@ The Rust extractor itself is covered by unit tests plus a documented real-cred s
       mismatch; data-bar-during-handshake mismatch.
 - [x] `metrics.rs`: `snapshot()` defaults + reflects atomic updates; `iso()` null/string.
 - [x] `cargo test` (18 pass), `cargo clippy`, `cargo fmt --check` all clean.
-- [x] **Commit:** `test(wsr): config, frame-classification, metrics unit tests` (`faf3b71`)
+- [x] **Commit:** `test(wsr): unit-test config, frame classification, and metrics` (`fceec76`)
 
 ## Phase 5 — Local e2e orchestration
 

@@ -131,6 +131,6 @@ trees: share values through fixtures, never `import conftest`.
 
 ## Commit trail
 
-| Commit | Phase |
+| Commit subject | Phase |
 |---|---|
-| `test(frontend): FastAPI route tests against fixture Iceberg + mocked logging` | 3 |
+| `test(frontend): API route tests over fixture iceberg with mocked logging` | 3 |

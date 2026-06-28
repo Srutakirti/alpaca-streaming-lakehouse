@@ -183,8 +183,10 @@ its dependencies as arguments).
 
 ## Commit trail
 
-| Commit | Phase |
+| Commit subject | Phase |
 |---|---|
-| `test: add pytest scaffolding, dev deps, fixtures` | 0 |
-| `test(load): extract pure helpers + unit tests for projection/flush/metrics` | 1 |
-| `test(load): kafka->iceberg consume-loop integration test` | 2 |
+| `test: add pytest scaffolding, dev deps, and shared fixtures` | 0 |
+| `test(load): extract pure helpers; unit-test projection, flush, metrics` | 1 |
+
+Phase 2 (loader integration test) is documented separately in
+`phase-2-loader-integration-tests.md`.

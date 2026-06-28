@@ -143,6 +143,6 @@ exercises the `#[serde(rename = "T")]` mapping), then assert the classification:
 
 ## Commit trail
 
-| Commit | Phase |
+| Commit subject | Phase |
 |---|---|
-| `test(wsr): config, frame-classification, metrics unit tests` | 4 |
+| `test(wsr): unit-test config, frame classification, and metrics` | 4 |
