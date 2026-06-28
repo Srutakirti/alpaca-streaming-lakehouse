@@ -141,6 +141,13 @@ exercises the `#[serde(rename = "T")]` mapping), then assert the classification:
   - the loader integration + Phase 5 e2e tests, which consume the frame format the
     extractor produces.
 
+## Files (paths relative to repo root)
+
+Tests live inline in `#[cfg(test)] mod tests` blocks within each source file:
+- `wsr/src/config.rs` — config defaults/errors/CSV/redaction
+- `wsr/src/ws.rs` — `classify_frame` handshake classification
+- `wsr/src/metrics.rs` — `snapshot()` + `iso()`
+
 ## Commit trail
 
 | Commit subject | Phase |

@@ -129,6 +129,14 @@ breaking collection. Fixed by exposing the value as an `alpaca_fields` **fixture
 root `conftest.py` and consuming it via dependency injection. Lesson for future test
 trees: share values through fixtures, never `import conftest`.
 
+## Files (paths relative to repo root)
+
+- `frontend/tests/test_api.py` — the 16 route tests
+- `frontend/tests/conftest.py` — `seeded_client` / `empty_client` / `seed_info` fixtures
+- `conftest.py` (repo root) — shared `tmp_iceberg` / `make_frame` fixtures
+- Routes under test: `frontend/app/main.py`, `frontend/app/routes/bars.py`,
+  `frontend/app/routes/pipeline.py` (+ `iceberg_client.py`, `logging_client.py`)
+
 ## Commit trail
 
 | Commit subject | Phase |

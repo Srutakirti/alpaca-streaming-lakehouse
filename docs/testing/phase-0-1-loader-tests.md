@@ -181,6 +181,22 @@ its dependencies as arguments).
   (both in `load/subscriber.py`). `project_frame` follows `PYARROW_SCHEMA`
   automatically; the projection test asserts the two stay aligned.
 
+## Files (paths relative to repo root)
+
+Test files:
+- `tests/test_scaffolding.py` — harness smoke test (Phase 0)
+- `load/tests/test_projection.py` — `project_frame` (Phase 1)
+- `load/tests/test_should_flush.py` — `should_flush` truth table (Phase 1)
+- `load/tests/test_flush.py` — `flush()` append + error path (Phase 1)
+- `load/tests/test_metrics.py` — `_Metrics.snapshot()` (Phase 1)
+
+Shared fixtures / config:
+- `conftest.py` (repo root) — fixtures + data factory + run-order hook
+- `pyproject.toml` (root) — dev deps, `[tool.uv.sources]`, pytest config
+
+Source under test (behavior-preserving refactor):
+- `load/subscriber.py` — `project_frame`, `should_flush`
+
 ## Commit trail
 
 | Commit subject | Phase |

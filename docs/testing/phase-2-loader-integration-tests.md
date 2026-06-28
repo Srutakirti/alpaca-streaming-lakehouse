@@ -94,6 +94,12 @@ loader→frontend contract — not just to the in-memory table object the writer
   `localhost:9092`); pointing at a cloud VM (`KAFKA_BROKER=<vm_ip>:9092`) runs the exact
   same assertions against the deployed broker. This is the Phase 6 deployment gate.
 
+## Files (paths relative to repo root)
+
+- `load/tests/test_consume_integration.py` — the integration test (marked `integration`)
+- `conftest.py` (repo root) — provides the `tmp_iceberg` and `make_frame` fixtures
+- `load/subscriber.py` — `run_consumer` extracted here from `main()`
+
 ## Commit trail
 
 | Commit subject | Phase |
