@@ -45,13 +45,14 @@ The Rust extractor itself is covered by unit tests plus a documented real-cred s
 | 2 — loader integration | ✅ done | `b924499` |
 | (logical run order) | ✅ done | `c08d58a` — pipeline-flow ordering hook |
 | 3 — frontend API | ✅ done | `d45ca10` |
-| 4 — Rust extractor | ⬜ in progress | |
+| 4 — Rust extractor | ✅ done | `faf3b71` |
 | 5 — local e2e orchestration | ⬜ todo | |
 | 6 — cloud deploy of `wsr/` | ⬜ todo | after local green |
 
-**Test counts:** 42 unit pass by default (`uv run pytest`), 44 with integration
-(`-m ''`, Tansu up). Docs: `docs/testing/phase-0-1-loader-tests.md`,
-`docs/testing/phase-3-frontend-tests.md`.
+**Test counts:** 42 Python unit pass by default (`uv run pytest`), 44 with integration
+(`-m ''`, Tansu up); 18 Rust unit pass (`cd wsr && cargo test`). Docs:
+`docs/testing/phase-0-1-loader-tests.md`, `phase-3-frontend-tests.md`,
+`phase-4-rust-extractor-tests.md`.
 
 ---
 
@@ -105,21 +106,17 @@ The Rust extractor itself is covered by unit tests plus a documented real-cred s
 - [x] **Commit:** `test(frontend): FastAPI route tests against fixture Iceberg + mocked logging`
       (`d45ca10`)
 
-## Phase 4 — Rust extractor: unit tests
+## Phase 4 — Rust extractor: unit tests ✅
 
-Add `#[cfg(test)]` modules in `wsr/src/`. Keep network/Kafka out of unit tests.
-- [ ] `config.rs`: tests for `Config::from_env()` (defaults, required-var errors, CSV symbol
-      parsing incl. trimming/empty filtering, `opt_parse` invalid-value error) using a
-      `serial`-guarded env mutex; and the `redact()` / `Debug` impl never leaks the secret
-      and truncates the key. (Add `serial_test` as a `[dev-dependencies]` crate, or a local
-      `Mutex` guard, since env is process-global.)
-- [ ] `ws.rs`: refactor the auth/handshake **frame classification** (currently inline around
-      `ws.rs:178-181` — success vs `error` → Fatal) into a small pure function
-      `classify_frame(&str) -> FrameKind` and unit-test it (connected, authenticated,
-      subscription, error/fatal, data frame) without a socket.
-- [ ] `metrics.rs`: test `snapshot()` JSON shape and that atomic counters reflect updates.
-- [ ] Verify `cargo test`, `cargo clippy`, `cargo fmt --check` all pass from `wsr/`.
-- [ ] **Commit:** `test(wsr): config, frame-classification, metrics unit tests`
+- [x] `config.rs`: refactored `from_env` → pure `from_getter(closure)` (avoids `unsafe`
+      env mutation in edition 2024 — **no `serial_test` needed**). Tests: defaults,
+      missing-required, CSV symbols, overrides, invalid-number, `redact()`, Debug-no-leak.
+- [x] `ws.rs`: extracted `classify_frame` + `FrameClass` from `expect` (pure). Tests:
+      connected/authenticated/subscription match; error→Fatal (w/ + w/o code); type/msg
+      mismatch; data-bar-during-handshake mismatch.
+- [x] `metrics.rs`: `snapshot()` defaults + reflects atomic updates; `iso()` null/string.
+- [x] `cargo test` (18 pass), `cargo clippy`, `cargo fmt --check` all clean.
+- [x] **Commit:** `test(wsr): config, frame-classification, metrics unit tests` (`faf3b71`)
 
 ## Phase 5 — Local e2e orchestration
 
