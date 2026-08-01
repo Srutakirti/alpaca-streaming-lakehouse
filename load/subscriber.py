@@ -7,15 +7,16 @@ import threading
 import sys
 from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Optional
 
 import pyarrow as pa
 from confluent_kafka import Consumer, KafkaError, TopicPartition
 from confluent_kafka.admin import AdminClient, NewTopic
 from pyiceberg.catalog.sql import SqlCatalog
+from pyiceberg.partitioning import PartitionField, PartitionSpec
 from pyiceberg.schema import Schema as IcebergSchema
+from pyiceberg.transforms import DayTransform, IdentityTransform
 from pyiceberg.types import (
-    NestedField, StringType, DoubleType, LongType,
+    NestedField, StringType, DoubleType, LongType, TimestamptzType, TimestampType,
 )
 import google.cloud.logging
 from google.cloud.logging_v2.handlers import CloudLoggingHandler
@@ -29,6 +30,7 @@ ICEBERG_CATALOG_URI = os.environ.get("ICEBERG_CATALOG_URI", "sqlite:///./warehou
 ICEBERG_WAREHOUSE = os.environ.get("ICEBERG_WAREHOUSE", "./warehouse")
 ICEBERG_NAMESPACE = os.environ.get("ICEBERG_NAMESPACE", "alpaca")
 ICEBERG_TABLE = os.environ.get("ICEBERG_TABLE", "bars")
+ICEBERG_T_TYPE = os.environ.get("ICEBERG_T_TYPE", "string").lower()
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 100))
 BATCH_INTERVAL = int(os.environ.get("BATCH_INTERVAL", 300))
 PORT = int(os.environ.get("PORT", 8080))
@@ -36,8 +38,9 @@ LOG_MODE = os.environ.get("LOG_MODE", "stdout")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_NAME = os.environ.get("LOG_NAME", "alpaca-loader")
 METRICS_INTERVAL = int(os.environ.get("METRICS_INTERVAL", 10))
+ICEBERG_APPEND_MAX_ATTEMPTS = int(os.environ.get("ICEBERG_APPEND_MAX_ATTEMPTS", 3))
 
-PYARROW_SCHEMA = pa.schema([
+PYARROW_STRING_SCHEMA = pa.schema([
     pa.field("T", pa.string()),
     pa.field("S", pa.string()),
     pa.field("o", pa.float64()),
@@ -48,7 +51,22 @@ PYARROW_SCHEMA = pa.schema([
     pa.field("t", pa.string()),
 ])
 
-ICEBERG_TABLE_SCHEMA = IcebergSchema(
+PYARROW_TIMESTAMP_SCHEMA = pa.schema([
+    pa.field("T", pa.string()),
+    pa.field("S", pa.string()),
+    pa.field("o", pa.float64()),
+    pa.field("h", pa.float64()),
+    pa.field("l", pa.float64()),
+    pa.field("c", pa.float64()),
+    pa.field("v", pa.int64()),
+    pa.field("t", pa.timestamp("us", tz="UTC")),
+])
+
+# Default schema for existing string-typed Iceberg tables. Kept as the stable
+# public constant used by tests and helpers while timestamp tables are opt-in.
+PYARROW_SCHEMA = PYARROW_STRING_SCHEMA
+
+ICEBERG_STRING_TABLE_SCHEMA = IcebergSchema(
     NestedField(1, "T", StringType(), required=False),
     NestedField(2, "S", StringType(), required=False),
     NestedField(3, "o", DoubleType(), required=False),
@@ -59,10 +77,25 @@ ICEBERG_TABLE_SCHEMA = IcebergSchema(
     NestedField(8, "t", StringType(), required=False),
 )
 
+ICEBERG_TIMESTAMP_TABLE_SCHEMA = IcebergSchema(
+    NestedField(1, "T", StringType(), required=False),
+    NestedField(2, "S", StringType(), required=False),
+    NestedField(3, "o", DoubleType(), required=False),
+    NestedField(4, "h", DoubleType(), required=False),
+    NestedField(5, "l", DoubleType(), required=False),
+    NestedField(6, "c", DoubleType(), required=False),
+    NestedField(7, "v", LongType(), required=False),
+    NestedField(8, "t", TimestamptzType(), required=False),
+)
+
+ICEBERG_PARTITION_SPEC = PartitionSpec(
+    PartitionField(source_id=8, field_id=1000, transform=DayTransform(), name="t_day"),
+    PartitionField(source_id=2, field_id=1001, transform=IdentityTransform(), name="S"),
+)
 
 # Iceberg schema field names, in order. Projection is derived from the schema so
 # adding a field to PYARROW_SCHEMA automatically flows into project_frame().
-SCHEMA_FIELDS = PYARROW_SCHEMA.names
+SCHEMA_FIELDS = PYARROW_STRING_SCHEMA.names
 
 
 def project_frame(batch: list) -> list:
@@ -91,7 +124,9 @@ def setup_logging(name: str, mode: str = "stdout", level: str = "INFO") -> loggi
 
     if mode in ("stdout", "both") or (mode == "cloud" and not PROJECT_ID):
         handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s: %(message)s"))
+        formatter = logging.Formatter("%(asctime)sZ %(levelname)s: %(message)s")
+        formatter.converter = time.gmtime
+        handler.setFormatter(formatter)
         logger.addHandler(handler)
 
     return logger
@@ -107,6 +142,7 @@ class _Metrics:
         self.iceberg_append_errors: int = 0
         self.consumer_lag: int = 0
         self.last_commit_ts: str = ""
+        self.latest_record_t: str = ""
 
     def snapshot(self) -> dict:
         return {
@@ -119,6 +155,7 @@ class _Metrics:
             "iceberg_append_errors": self.iceberg_append_errors,
             "consumer_lag": self.consumer_lag,
             "last_commit_ts": self.last_commit_ts,
+            "latest_record_t": self.latest_record_t,
         }
 
 
@@ -184,27 +221,92 @@ def bootstrap_iceberg() -> any:
         catalog.create_namespace(ns)
     full_name = f"{ICEBERG_NAMESPACE}.{ICEBERG_TABLE}"
     if not catalog.table_exists(full_name):
-        catalog.create_table(full_name, schema=ICEBERG_TABLE_SCHEMA)
+        if ICEBERG_T_TYPE == "timestamp":
+            catalog.create_table(
+                full_name,
+                schema=ICEBERG_TIMESTAMP_TABLE_SCHEMA,
+                partition_spec=ICEBERG_PARTITION_SPEC,
+            )
+        else:
+            catalog.create_table(full_name, schema=ICEBERG_STRING_TABLE_SCHEMA)
     return catalog.load_table(full_name)
+
+
+def _parse_utc(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+
+
+def _latest_record_t(records: list) -> str:
+    values = [r.get("t") for r in records if r.get("t")]
+    return max(values) if values else ""
+
+
+def _table_uses_timestamp_t(iceberg_table) -> bool:
+    try:
+        field_type = iceberg_table.schema().find_field("t").field_type
+        return isinstance(field_type, (TimestampType, TimestamptzType))
+    except Exception:
+        return False
+
+
+def _records_for_write(records: list, timestamp_t: bool) -> list:
+    sorted_records = sorted(records, key=lambda r: (r.get("S") or "", r.get("t") or ""))
+    if not timestamp_t:
+        return sorted_records
+
+    converted = []
+    for record in sorted_records:
+        row = dict(record)
+        if isinstance(row.get("t"), str) and row["t"]:
+            row["t"] = _parse_utc(row["t"])
+        converted.append(row)
+    return converted
+
+
+def _is_iceberg_commit_conflict(error: Exception) -> bool:
+    message = str(error).lower()
+    return "branch main has changed" in message or "requirement failed" in message
 
 
 def flush(records: list, iceberg_table, metrics: _Metrics, logger: logging.Logger) -> bool:
     if not records:
         return True
     t0 = time.monotonic()
-    try:
-        arrow_table = pa.Table.from_pylist(records, schema=PYARROW_SCHEMA)
-        iceberg_table.append(arrow_table)
-        metrics.last_flush_records = len(records)
-        metrics.last_flush_duration_ms = (time.monotonic() - t0) * 1000
-        metrics.batches_flushed += 1
-        metrics.records_appended += len(records)
-        logger.info(f"Flushed {len(records)} records to Iceberg ({metrics.last_flush_duration_ms:.0f}ms)")
-        return True
-    except Exception as e:
-        metrics.iceberg_append_errors += 1
-        logger.error(f"Iceberg append failed: {e}")
-        return False
+    latest_t = _latest_record_t(records)
+    timestamp_t = _table_uses_timestamp_t(iceberg_table)
+    schema = PYARROW_TIMESTAMP_SCHEMA if timestamp_t else PYARROW_STRING_SCHEMA
+    arrow_table = pa.Table.from_pylist(_records_for_write(records, timestamp_t), schema=schema)
+
+    max_attempts = max(1, ICEBERG_APPEND_MAX_ATTEMPTS)
+    for attempt in range(1, max_attempts + 1):
+        try:
+            iceberg_table.append(arrow_table)
+            metrics.last_flush_records = len(records)
+            metrics.last_flush_duration_ms = (time.monotonic() - t0) * 1000
+            metrics.batches_flushed += 1
+            metrics.records_appended += len(records)
+            metrics.latest_record_t = latest_t
+            logger.info(f"Flushed {len(records)} records to Iceberg ({metrics.last_flush_duration_ms:.0f}ms)")
+            return True
+        except Exception as e:
+            metrics.iceberg_append_errors += 1
+            retryable = _is_iceberg_commit_conflict(e) and hasattr(iceberg_table, "refresh")
+            if retryable and attempt < max_attempts:
+                logger.warning(
+                    "Iceberg append conflict on attempt %s/%s; refreshing table metadata and retrying: %s",
+                    attempt,
+                    max_attempts,
+                    e,
+                )
+                try:
+                    iceberg_table.refresh()
+                except Exception as refresh_error:
+                    logger.error(f"Iceberg table refresh failed after append conflict: {refresh_error}")
+                    return False
+                continue
+
+            logger.error(f"Iceberg append failed: {e}")
+            return False
 
 
 def run_consumer(consumer, iceberg_table, metrics: _Metrics, logger: logging.Logger,

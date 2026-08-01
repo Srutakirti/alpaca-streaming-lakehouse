@@ -4,6 +4,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends librdkafka1 && 
 RUN pip install uv
 COPY pyproject.toml uv.lock ./
 COPY extract/pyproject.toml extract/
+COPY load/pyproject.toml load/
+COPY frontend/pyproject.toml frontend/
 RUN uv sync --package extract
 COPY extract/extractor.py extract/probe.py extract/
 CMD ["uv", "run", "--package", "extract", "python", "extract/extractor.py"]

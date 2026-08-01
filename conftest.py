@@ -55,7 +55,7 @@ def _make_bar(
     t: str = "2026-06-27T14:30:00Z",
     o: float = 100.0,
     h: float = 101.0,
-    l: float = 99.0,
+    l: float = 99.0,  # noqa: E741 - Alpaca/Iceberg field name
     c: float = 100.5,
     v: int = 1000,
     type_: str = "b",

@@ -2,10 +2,10 @@ use crate::config::Config;
 use crate::metrics::Metrics;
 use bytes::Bytes;
 use futures_util::stream::{FuturesUnordered, StreamExt};
+use rdkafka::Message;
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::client::DefaultClientContext;
 use rdkafka::config::ClientConfig;
-use rdkafka::Message;
 use rdkafka::error::{KafkaError, RDKafkaErrorCode};
 use rdkafka::producer::{FutureProducer, FutureRecord, Producer};
 use rdkafka::util::Timeout;
@@ -63,7 +63,11 @@ pub fn warm_metadata(producer: &FutureProducer, topic: &str) -> Result<(), Error
         .client()
         .fetch_metadata(Some(topic), Timeout::After(Duration::from_secs(10)))
         .map_err(|e| Error::Metadata(e.to_string()))?;
-    tracing::info!(brokers = md.brokers().len(), topics = md.topics().len(), "metadata warmed");
+    tracing::info!(
+        brokers = md.brokers().len(),
+        topics = md.topics().len(),
+        "metadata warmed"
+    );
     Ok(())
 }
 
@@ -147,7 +151,10 @@ async fn enqueue(
         match producer.send_result(record) {
             Ok(fut) => return Some(fut),
             Err((KafkaError::MessageProduction(RDKafkaErrorCode::QueueFull), rec)) => {
-                tracing::warn!(payload_len = rec.payload.map(|p| p.len()), "librdkafka queue full; backing off");
+                tracing::warn!(
+                    payload_len = rec.payload.map(|p| p.len()),
+                    "librdkafka queue full; backing off"
+                );
                 payload = Bytes::copy_from_slice(rec.payload.unwrap_or(&[]));
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
@@ -159,4 +166,3 @@ async fn enqueue(
         }
     }
 }
-
