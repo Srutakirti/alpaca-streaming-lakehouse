@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpq5 && rm -r
 RUN pip install uv
 
 COPY pyproject.toml uv.lock ./
+COPY extract/pyproject.toml extract/
+COPY load/pyproject.toml load/
 COPY frontend/pyproject.toml frontend/
 RUN uv sync --package frontend
 

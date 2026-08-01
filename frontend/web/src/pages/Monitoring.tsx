@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createChart, ColorType, LineStyle, LineSeries } from 'lightweight-charts'
 import { formatUtcChartLabel, formatUtcChartTick, formatUtcTime } from '../lib/time'
 
@@ -10,6 +10,7 @@ interface PipelineStatus {
     snapshot_count?: number
     latest_snapshot_ts?: number
     latest_record_t?: string
+    latest_record_t_source?: string
     row_count?: number
     error?: string
   }
@@ -50,6 +51,22 @@ function StatusCard({ label, value, sub, colorClass }: {
       <div className="card-label">{label}</div>
       <div className={`card-value ${colorClass ?? ''}`}>{value}</div>
       {sub && <div className="card-sub">{sub}</div>}
+    </div>
+  )
+}
+
+function UtcClock() {
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  return (
+    <div className="utc-clock" aria-label="Current UTC time">
+      <span className="utc-clock-label">UTC</span>
+      <span className="utc-clock-value">{formatUtcTime(now.toISOString())}</span>
     </div>
   )
 }
@@ -110,11 +127,15 @@ export default function Monitoring() {
   const lastFlushRecords = ldr ? Number(ldr.last_flush_records ?? 0) : 0
   const lastFlushMs = ldr ? Number(ldr.last_flush_duration_ms ?? 0) : 0
   const snapshotTs = ice?.latest_snapshot_ts
-  const dataLag = dataLagLabel(ice?.latest_record_t)
+  const loaderDataLag = dataLagLabel(ldr?.latest_record_t ? String(ldr.latest_record_t) : undefined)
+  const icebergDataLag = dataLagLabel(ice?.latest_record_t)
 
   return (
     <div>
-      <div className="page-title">Pipeline Monitoring</div>
+      <div className="page-header">
+        <div className="page-title">Pipeline Monitoring</div>
+        <UtcClock />
+      </div>
 
       <div className="cards">
         <StatusCard
@@ -142,10 +163,16 @@ export default function Monitoring() {
           sub={ice ? `${ice.snapshot_count ?? 0} snapshots` : undefined}
         />
         <StatusCard
-          label="Data Lag (now − max t)"
-          value={status === undefined ? '...' : dataLag.value}
-          colorClass={dataLag.color}
-          sub={ice?.latest_record_t ? `latest t=${ice.latest_record_t}` : ice?.row_count !== undefined ? `${ice.row_count} rows` : undefined}
+          label="Loader Data Lag"
+          value={status === undefined ? '...' : loaderDataLag.value}
+          colorClass={loaderDataLag.color}
+          sub={ldr?.latest_record_t ? `latest t=${ldr.latest_record_t}` : undefined}
+        />
+        <StatusCard
+          label="Iceberg Data Lag"
+          value={status === undefined ? '...' : icebergDataLag.value}
+          colorClass={icebergDataLag.color}
+          sub={ice?.latest_record_t ? `latest t=${ice.latest_record_t}` : ice?.latest_record_t_source ? `source=${ice.latest_record_t_source}` : ice?.row_count !== undefined ? `${ice.row_count} rows` : undefined}
         />
         <StatusCard
           label="Append Errors"
@@ -163,6 +190,11 @@ export default function Monitoring() {
       <div className="section">
         <div className="section-title">Consumer Lag (last 60 min)</div>
         <LagSparkline data={lagSeries} />
+        <div className="metric-note">
+          <span>Consumer lag</span>
+          <code>Kafka high watermark - committed consumer offset</code>
+          <span>Commit happens after the loader appends the batch to Iceberg.</span>
+        </div>
       </div>
     </div>
   )

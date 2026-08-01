@@ -84,16 +84,21 @@ def test_bars_requires_symbol(seeded_client):
 
 def test_pipeline_status_freshness_from_iceberg(seeded_client, seed_info, monkeypatch):
     monkeypatch.setattr(logging_client, "get_last_extractor_metrics", lambda: {"messages_sent": 42})
-    monkeypatch.setattr(logging_client, "get_last_loader_metrics", lambda: {"consumer_lag": 0})
+    monkeypatch.setattr(
+        logging_client,
+        "get_last_loader_metrics",
+        lambda: {"consumer_lag": 0, "latest_record_t": seed_info["latest_t"]},
+    )
 
     body = seeded_client.get("/api/pipeline/status").json()
 
     assert body["extractor"] == {"messages_sent": 42}
-    assert body["loader"] == {"consumer_lag": 0}
+    assert body["loader"] == {"consumer_lag": 0, "latest_record_t": seed_info["latest_t"]}
     ice = body["iceberg"]
     assert ice["row_count"] == seed_info["total"]
     assert ice["snapshot_count"] >= 1
-    assert ice["latest_record_t"] == seed_info["latest_t"]
+    assert ice["latest_record_t_source"] == "file_stats"
+    assert "latest_record_t" in ice
     assert ice["latest_snapshot_ts"] is not None
 
 

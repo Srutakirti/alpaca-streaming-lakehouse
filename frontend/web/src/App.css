@@ -26,7 +26,39 @@ body {
 
 .main { flex: 1; padding: 1.5rem; max-width: 1200px; width: 100%; margin: 0 auto; }
 
-.page-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 1.25rem; color: #e2e8f0; }
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.page-title { font-size: 1.25rem; font-weight: 600; color: #e2e8f0; }
+
+.utc-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 9.5rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid #2d3148;
+  border-radius: 6px;
+  background: #171a23;
+}
+.utc-clock-label {
+  font-size: 0.68rem;
+  color: #64748b;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.utc-clock-value {
+  color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
 
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
 
@@ -58,6 +90,37 @@ body {
 }
 
 .sparkline-wrap { width: 100%; height: 120px; }
+
+.metric-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.65rem;
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #2d3148;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+.metric-note code {
+  color: #94a3b8;
+  background: #11141b;
+  border: 1px solid #2d3148;
+  border-radius: 4px;
+  padding: 0.18rem 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.74rem;
+}
+
+@media (max-width: 560px) {
+  .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .utc-clock {
+    width: 100%;
+  }
+}
 
 .loading { color: #64748b; font-size: 0.875rem; }
 .error-msg { color: #f87171; font-size: 0.875rem; }

@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -22,7 +21,7 @@ app.include_router(pipeline.router, prefix="/api/pipeline")
 
 
 @app.get("/api/health")
-def health():
+async def health():
     return {"status": "ok"}
 
 
@@ -31,5 +30,5 @@ if _static.exists():
     app.mount("/assets", StaticFiles(directory=_static / "assets"), name="assets")
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    def spa(full_path: str):
+    async def spa(full_path: str):
         return FileResponse(_static / "index.html")

@@ -10,9 +10,10 @@ module-level constants at import time and caches the catalog with lru_cache, so 
 monkeypatch the constants and clear the cache (and the symbols cache) per test.
 """
 import logging
+import asyncio
 
+import httpx
 import pytest
-from fastapi.testclient import TestClient
 
 # The known dataset every seeded test asserts against.
 SEED = {"AAPL": 3, "TSLA": 2}  # symbol -> bar count
@@ -21,6 +22,25 @@ SEED_TOTAL = sum(SEED.values())
 # AAPL's 3rd (14:32). Both symbols start at 14:30.
 LATEST_T = "2026-06-27T14:32:00Z"
 _ICEBERG_KEYS = ("ICEBERG_CATALOG_URI", "ICEBERG_WAREHOUSE", "ICEBERG_NAMESPACE", "ICEBERG_TABLE")
+
+
+class ASGISyncClient:
+    """Small sync facade over httpx.ASGITransport.
+
+    Starlette's TestClient currently hangs in this environment, while the
+    ASGITransport async path works reliably.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    def get(self, url: str, **kwargs) -> httpx.Response:
+        async def _request():
+            transport = httpx.ASGITransport(app=self.app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                return await client.get(url, **kwargs)
+
+        return asyncio.run(_request())
 
 
 @pytest.fixture
@@ -53,7 +73,7 @@ def seeded_client(iceberg_env, tmp_iceberg, make_frame, monkeypatch):
     _point_frontend_at(iceberg_env, monkeypatch)
 
     from frontend.app.main import app
-    client = TestClient(app)
+    client = ASGISyncClient(app)
     yield client
 
     from frontend.app import iceberg_client
@@ -68,7 +88,7 @@ def empty_client(iceberg_env, tmp_iceberg, monkeypatch):
     _point_frontend_at(iceberg_env, monkeypatch)
 
     from frontend.app.main import app
-    client = TestClient(app)
+    client = ASGISyncClient(app)
     yield client
 
     from frontend.app import iceberg_client
