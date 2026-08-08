@@ -4,8 +4,11 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "duckdb>=1.5.3",
+    "jupyterlab>=4.5.0",
+    "load",
     "numpy>=2.4.6",
     "pandas>=3.0.3",
+    "pyspark>=3.5.0,<3.6",
 ]
 
 [tool.uv.workspace]
