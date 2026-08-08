@@ -46,13 +46,15 @@ The Rust extractor itself is covered by unit tests plus a documented real-cred s
 | (logical run order) | ✅ done | `60c9069` — pipeline-flow ordering hook |
 | 3 — frontend API | ✅ done | `dfda24f` |
 | 4 — Rust extractor | ✅ done | `fceec76` |
-| 5 — local e2e orchestration | ⬜ todo | |
+| 5 — local e2e orchestration | ✅ done | uncommitted |
 | 6 — cloud deploy of `wsr/` | ⬜ todo | after local green |
 
-**Test counts:** 42 Python unit pass by default (`uv run pytest`), 44 with integration
-(`-m ''`, Tansu up); 18 Rust unit pass (`cd wsr && cargo test`). Docs in
+**Test counts:** 42 Python unit/API tests pass by default (`uv run pytest`), 44 with
+integration (`-m integration`, Tansu up), 1 e2e (`-m e2e`, Tansu up); 18 Rust unit pass
+(`cd wsr && cargo test`). Docs in
 `docs/testing/`: `phase-0-1-loader-tests.md`, `phase-2-loader-integration-tests.md`,
-`phase-3-frontend-tests.md`, `phase-4-rust-extractor-tests.md`.
+`phase-3-frontend-tests.md`, `phase-4-rust-extractor-tests.md`,
+`phase-5-local-e2e-tests.md`, `testing-file-inventory.md`.
 
 ---
 
@@ -118,22 +120,22 @@ The Rust extractor itself is covered by unit tests plus a documented real-cred s
 - [x] `cargo test` (18 pass), `cargo clippy`, `cargo fmt --check` all clean.
 - [x] **Commit:** `test(wsr): unit-test config, frame classification, and metrics` (`fceec76`)
 
-## Phase 5 — Local e2e orchestration
+## Phase 5 — Local e2e orchestration ✅
 
-- [ ] `docker-compose.yml` at repo root: a `tansu` service
+- [x] `docker-compose.yml` at repo root: a `tansu` service
       (`ghcr.io/tansu-io/tansu:0.6.0`, `--storage-engine memory://`, port 9092) so the local
       broker is one command. (Loader/frontend stay `uv run` for fast iteration; optionally add
       profiles for them later.)
-- [ ] `Makefile` targets: `up`/`down` (compose), `test` (fast unit, default marker filter),
+- [x] `Makefile` targets: `up`/`down` (compose), `test` (fast unit, default marker filter),
       `test-integration` (`-m integration`, brings up tansu), `e2e` (`-m e2e`),
       `lint` (`ruff` for Python if desired + `cargo fmt/clippy` for Rust), `smoke`
       (existing `scripts/peek_kafka.py` / `query_iceberg.py` / `inspect_frontend_api.py`).
-- [ ] `tests/e2e/test_pipeline_e2e.py`, marked `@pytest.mark.e2e`: with tansu up, run the
+- [x] `tests/e2e/test_pipeline_e2e.py`, marked `@pytest.mark.e2e`: with tansu up, run the
       **synthetic generator** for a few seconds → run the loader (`run_consumer`) until rows
       appear → drive the **frontend `TestClient`** against the same warehouse and assert
       `/api/symbols` and `/api/bars` return the generated symbols/bars. One assertion chain
       proving extractor-shape→Kafka→Iceberg→API end to end.
-- [ ] Update `CLAUDE.md` / `README.md` Commands with `make` targets and the e2e procedure;
+- [x] Update `CLAUDE.md` / `README.md` Commands with `make` targets and the e2e procedure;
       add a `docs/runbooks/` note only if recovery steps exceed one manual step.
 - [ ] **Commit:** `test(e2e): docker-compose + Makefile + full local pipeline e2e test`
 
@@ -157,9 +159,13 @@ prod `ICEBERG_*`, `GCP_PROJECT_ID`).
 - **Fast unit suite (default):** `make test` → `uv run pytest -m "not integration and not e2e"`
   and `cd wsr && cargo test`. Green with no Docker/GCP.
 - **Integration:** `make up && make test-integration` — loader consume-loop against local Tansu
-  writes to a temp sqlite Iceberg and commits offsets.
+  writes to a pytest temp sqlite Iceberg warehouse and commits offsets.
 - **End-to-end:** `make e2e` — synthetic generator → Tansu → loader → Iceberg → frontend API
-  returns the generated bars.
+  returns the generated bars using a pytest temp warehouse, isolated from `./warehouse`.
+- **Manual monitorable run:** `make up`, run `load/subscriber.py` with
+  `ICEBERG_CATALOG_URI=sqlite:///./warehouse/catalog.db` and `ICEBERG_WAREHOUSE=./warehouse`,
+  then run the synthetic generator. This persists Parquet data and Iceberg metadata under
+  `./warehouse` until explicitly removed.
 - **Rust quality gate:** `cd wsr && cargo test && cargo clippy && cargo fmt --check`.
 - **Rust real-cred smoke (manual, market hours):** export Alpaca creds + `KAFKA_BROKER`,
   `cargo run --release`, confirm frames via `scripts/peek_kafka.py` and rows via
@@ -170,7 +176,7 @@ prod `ICEBERG_*`, `GCP_PROJECT_ID`).
 
 - `pyproject.toml` (root) — dev dependency-group + pytest config/markers.
 - `load/subscriber.py` — extract `project_frame`, `should_flush`, `run_consumer` (behavior-preserving).
-- `load/tests/*`, `frontend/tests/*`, `tests/conftest.py`, `tests/e2e/test_pipeline_e2e.py`.
+- `load/tests/*`, `frontend/tests/*`, `conftest.py`, `tests/e2e/test_pipeline_e2e.py`.
 - `wsr/src/{config.rs,ws.rs,metrics.rs}` — `#[cfg(test)]` modules; `classify_frame` refactor in `ws.rs`.
 - `wsr/Cargo.toml` — `[dev-dependencies]` (`serial_test`).
 - `docker-compose.yml`, `Makefile` (new, repo root).

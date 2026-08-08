@@ -1,0 +1,12 @@
+services:
+  tansu:
+    image: ghcr.io/tansu-io/tansu:0.6.0
+    command:
+      - --storage-engine
+      - memory://
+      - --kafka-listener-url
+      - tcp://0.0.0.0:9092
+      - --kafka-advertised-listener-url
+      - tcp://localhost:9092
+    ports:
+      - "9092:9092"

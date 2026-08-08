@@ -1,0 +1,47 @@
+substitutions:
+  _REGION: us-east1
+  _REPO: alpaca-datalake
+  _TAG: latest
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/alpaca-extractor:${_TAG}
+      - -f
+      - extract/Dockerfile
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/alpaca-extractor-rs:${_TAG}
+      - -f
+      - wsr/Dockerfile
+      - wsr
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/alpaca-loader:${_TAG}
+      - -f
+      - load/Dockerfile
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/alpaca-frontend:${_TAG}
+      - -f
+      - frontend/Dockerfile
+      - .
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/alpaca-extractor:${_TAG}
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/alpaca-extractor-rs:${_TAG}
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/alpaca-loader:${_TAG}
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/alpaca-frontend:${_TAG}
