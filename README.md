@@ -164,6 +164,7 @@ manual local pipeline above when you want files to remain available for inspecti
 Current cloud operations are documented in:
 
 - `docs/architecture-cloud-e2e.md`
+- `docs/security/gcp-iam-permissions.md`
 - `docs/runbooks/manual-cloud-pipeline-controls.md`
 
 ## Secrets (Secret Manager)
