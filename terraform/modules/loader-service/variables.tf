@@ -50,3 +50,9 @@ variable "batch_interval" {
   type    = number
   default = 300
 }
+
+variable "ingress" {
+  description = "Cloud Run ingress policy. Default is internal-only because the loader is a background worker with only operational HTTP endpoints."
+  type        = string
+  default     = "INGRESS_TRAFFIC_INTERNAL_ONLY"
+}

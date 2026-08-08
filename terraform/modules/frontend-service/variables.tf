@@ -33,7 +33,13 @@ variable "cloudsql_instance_connection_name" {
 }
 
 variable "allow_unauthenticated" {
-  description = "If true, grants roles/run.invoker to allUsers (public dashboard)."
+  description = "If true, grants roles/run.invoker to allUsers (public dashboard). Keep false for private dashboards."
   type        = bool
-  default     = true
+  default     = false
+}
+
+variable "ingress" {
+  description = "Cloud Run ingress policy. Default is internal-only to avoid public internet access."
+  type        = string
+  default     = "INGRESS_TRAFFIC_INTERNAL_ONLY"
 }

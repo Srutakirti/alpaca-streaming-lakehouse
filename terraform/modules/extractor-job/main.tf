@@ -25,7 +25,7 @@ resource "google_cloud_run_v2_job" "extractor" {
     template {
       service_account = google_service_account.extractor.email
       max_retries     = 3
-      timeout         = "32400s" # 9h — full 9:30→17:00 ET trading session; alpaca-extractor-stop kills it earlier in practice.
+      timeout         = "32400s" # 9h safety cap. The producer normally self-terminates after its idle window near market close.
 
       containers {
         # Rust producer (wsr). Reads Alpaca creds from env, not the GCP SDK —
