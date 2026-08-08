@@ -14,6 +14,10 @@ wsr/target/
 wsr/secrets.txt
 wsr/.env
 *.log
+.local-run/
+.env
+.env.local
+warehouse/
 
 # Terraform — state holds secrets; never commit it. Per-env vars + provider cache too.
 **/.terraform/

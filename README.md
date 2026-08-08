@@ -30,24 +30,52 @@ Alpaca WebSocket (IEX feed)
 | 2 — GCP staging | GCP VM (terraform) | local | Cloud SQL + GCS | synthetic generator |
 | 3 — production | GCP VM (terraform) | Cloud Run Service | Cloud SQL + GCS | real Alpaca extractor |
 
-See `PLAN.md` for the full checklist with verification steps.
+See `TESTING_PLAN.md` for the local test and e2e checklist.
 
-## Quick Start — Local Smoke Test (Phase 1)
+## Quick Start — Manual Local Pipeline
+
+For the simplest real-Alpaca local run, create `.env` or `.env.local`:
+
+```bash
+ALPACA_KEY=your_key
+ALPACA_SECRET=your_secret
+ALPACA_SYMBOLS=AAPL,TSLA,NVDA
+```
+
+Then run:
+
+```bash
+make local-real-up
+make local-real-status
+make local-real-logs
+make local-real-down
+```
+
+This starts Tansu, the loader, the Rust Alpaca extractor, the FastAPI backend, and the
+Vite frontend dev server when `frontend/web/node_modules` exists. Logs are written under
+`.local-run/logs/`, and pid files under `.local-run/pids/`.
+
+If both `.env` and `.env.local` exist, `.env.local` is loaded last and overrides `.env`.
+
+If the frontend web process is skipped, install its dependencies once:
+
+```bash
+(cd frontend/web && npm install)
+```
+
+The manual commands below are the same pipeline expanded into separate terminals.
 
 ```bash
 # 1. Start Tansu
-docker run -d --name tansu -p 9092:9092 ghcr.io/tansu-io/tansu:0.6.0 \
-  --storage-engine memory:// \
-  --kafka-listener-url tcp://0.0.0.0:9092 \
-  --kafka-advertised-listener-url tcp://localhost:9092
+make up
 
-# 2. Start the loader (terminal A)
+# 2. Start the loader in terminal A
 KAFKA_BROKER=localhost:9092 \
 ICEBERG_CATALOG_URI=sqlite:///./warehouse/catalog.db \
 ICEBERG_WAREHOUSE=./warehouse LOG_MODE=stdout \
 uv run --package load python load/subscriber.py
 
-# 3. Start the synthetic generator (terminal B)
+# 3. Start the synthetic generator in terminal B
 uv run --package extract python extract/helpers/synthetic_stock_generator.py \
   --kafka localhost:9092 --topic alpaca-bars --symbols AAPL TSLA NVDA --rate 20
 
@@ -59,8 +87,59 @@ print(c.load_table('alpaca.bars').scan().to_arrow().to_pandas().tail())
 "
 
 # 5. Clean up
-docker stop tansu && docker rm tansu
+make down
 ```
+
+This manual run writes to the persistent local Iceberg warehouse at `./warehouse`.
+`make down` only stops Docker resources; it does not delete `./warehouse`. If you run
+the loader again with the same `ICEBERG_CATALOG_URI` and `ICEBERG_WAREHOUSE`, PyIceberg
+reuses the existing table and appends new Parquet files plus new metadata versions.
+
+Useful inspection paths:
+
+```bash
+# Data files
+ls -lt warehouse/alpaca/bars/data | head
+
+# Iceberg metadata JSON and Avro manifest files
+ls -lt warehouse/alpaca/bars/metadata | head
+
+# Latest table metadata JSON
+latest=$(ls -t warehouse/alpaca/bars/metadata/*.metadata.json | head -1)
+jq '.["current-snapshot-id"]' "$latest"
+```
+
+## Tests
+
+```bash
+# Fast local unit/API tests; no Docker or GCP.
+make test
+
+# Loader integration test against local Tansu.
+make test-integration
+
+# Full local pipeline: synthetic generator -> Tansu -> loader -> Iceberg -> API.
+make e2e
+
+# Python lint plus Rust fmt/clippy.
+make lint
+
+# Ad-hoc inspection helpers for a running local stack.
+make smoke
+```
+
+Real-Alpaca local run helpers:
+
+```bash
+make local-real-up       # start broker, loader, extractor, API, and Vite if installed
+make local-real-status   # show process status
+make local-real-logs     # tail .local-run/logs/*.log
+make local-real-down     # stop local processes and Tansu
+```
+
+Automated integration/e2e tests use pytest temp warehouses, not `./warehouse`. Those
+tests prove behavior and then their temp directories are cleaned by pytest. Use the
+manual local pipeline above when you want files to remain available for inspection.
 
 ## GCP Resources
 
@@ -69,16 +148,23 @@ docker stop tansu && docker rm tansu
 | GCS Bucket | `project-66783f65-9c3e-4880-9a3-alpaca-iceberg-warehouse` | Iceberg Parquet files |
 | GCS Bucket | `project-66783f65-9c3e-4880-9a3-alpaca-tansu-storage` | Reserved (Tansu uses memory://) |
 | Cloud SQL | `alpaca-iceberg-catalog` | db-f1-micro Postgres, us-east1 |
-| GCE VM | `tansu-broker` | e2-micro, Ubuntu 24.04, `35.196.44.0:9092` |
+| GCE VM | `tansu-broker` | e2-micro, Ubuntu 24.04, static IP `34.138.155.73:9092` |
 | Cloud Run Job | `alpaca-extractor` | Alpaca WS → Kafka |
-| Cloud Run Service | `alpaca-loader` | Kafka → Iceberg, min=1 instance |
+| Cloud Run Service | `alpaca-loader` | Kafka → Iceberg, private ingress, min=1 during market hours and min=0 after infra stop |
+| Cloud Run Service | `alpaca-frontend` | Dashboard/API, private ingress |
 | Artifact Registry | `alpaca-datalake` | us-east1 |
 | Secret Manager | `ALPACA_KEY`, `ALPACA_SECRET` | Alpaca credentials (manually created) |
 | Secret Manager | `ICEBERG_DB_PASSWORD` | Cloud SQL password (Terraform-managed) |
-| Cloud Scheduler | `alpaca-extractor-start` | 08:00 ET weekdays |
-| Cloud Scheduler | `alpaca-extractor-stop` | 17:00 ET weekdays |
+| Cloud Scheduler | `alpaca-infra-start` | 09:05 ET weekdays |
+| Cloud Scheduler | `alpaca-extractor-start` | 09:30 ET weekdays |
+| Cloud Scheduler | `alpaca-infra-stop` | 17:20 ET weekdays |
 
 **Project**: `project-66783f65-9c3e-4880-9a3`
+
+Current cloud operations are documented in:
+
+- `docs/architecture-cloud-e2e.md`
+- `docs/runbooks/manual-cloud-pipeline-controls.md`
 
 ## Secrets (Secret Manager)
 
@@ -167,8 +253,8 @@ df = c.load_table("alpaca.bars").scan().to_arrow().to_pandas()
 
 - [x] Kafka-based pipeline (Pub/Sub replaced)
 - [x] Iceberg sink (GCS Parquet replaced)
-- [x] Cloud Scheduler to start extractor at 08:00 ET and stop at 17:00 ET (weekdays)
+- [x] Cloud Scheduler to start infra at 09:05 ET, start extractor at 09:30 ET, and stop infra at 17:20 ET (weekdays)
 - [x] Full Terraform lifecycle (`apply` / `destroy`)
 - [ ] Remove legacy Pub/Sub topic `alpaca-bars` and subscription `alpaca-bars-sub` from GCP
 - [ ] Add day-level Iceberg partitioning on `t` field
-- [ ] Harden `alpaca-extractor-stop` scheduler (cancel running executions via Cloud Function)
+- [ ] Codify direct `gcloud` infra-control changes in Terraform: static Tansu IP, infra start/stop jobs, and scheduler IAM.
