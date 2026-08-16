@@ -1,0 +1,22 @@
+[project]
+name = "gce-hadoop-catalog"
+version = "0.1.0"
+description = "Local synthetic foundation for the GCE HadoopCatalog pipeline"
+requires-python = ">=3.12"
+dependencies = [
+    "confluent-kafka>=2.3.0",
+    "pyarrow>=18.0.0",
+    "pyspark>=3.5,<3.6",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-m 'not integration'"
+markers = ["integration: requires a runnable local Tansu binary"]
+
+[tool.ruff]
+line-length = 100
