@@ -50,3 +50,12 @@ class MarketBar:
             "close": self.close,
             "volume": self.volume,
         }
+
+    def as_alpaca(self) -> dict[str, object]:
+        """Return the exact bar field names used by Alpaca WebSocket frames."""
+        return {
+            "T": "b", "S": self.symbol, "o": self.open, "h": self.high,
+            "l": self.low, "c": self.close, "v": self.volume,
+            "t": utc_isoformat(self.event_time), "n": max(1, self.volume // 100),
+            "vw": round((self.high + self.low + self.close) / 3, 2),
+        }

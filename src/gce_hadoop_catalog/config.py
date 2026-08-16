@@ -10,9 +10,7 @@ from pathlib import Path
 @dataclass(frozen=True)
 class LocalSettings:
     runtime_dir: Path
-    namespace: str = "synthetic"
-    table: str = "bars"
-    topic: str = "synthetic-bars"
+    topic: str = "alpaca-bars"
     broker_host: str = "127.0.0.1"
     broker_port: int = 19092
     commit_window_seconds: int = 300
