@@ -3,4 +3,4 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
-loader-java/target/
+iceberg-loader-java/target/

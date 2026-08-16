@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alpaca bar WebSocket frame",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["T", "S", "o", "h", "l", "c", "v", "t", "n", "vw"],
+    "properties": {
+      "T": {"const": "b"}, "S": {"type": "string"},
+      "o": {"type": "number"}, "h": {"type": "number"}, "l": {"type": "number"}, "c": {"type": "number"},
+      "v": {"type": "integer"}, "t": {"type": "string", "format": "date-time"},
+      "n": {"type": "integer"}, "vw": {"type": "number"}
+    }
+  }
+}

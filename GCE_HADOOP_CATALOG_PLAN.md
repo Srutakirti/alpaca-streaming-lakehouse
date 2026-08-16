@@ -31,6 +31,14 @@ Work does not proceed automatically past a checkpoint.
 - Protect the single VM writer with an OS `flock`; Cloud Run and all other components are read-only catalog clients.
 - Validate locally, commit, and wait for approval.
 
+### Checkpoint 1R: Source-pluggable and catalog-neutral refinement
+
+- Keep the synthetic producer and add the Rust WebSocket extractor from `feat/tansu-iceberg-pipeline` at `e55c880` as a maintained component in this branch.
+- Validate the same loader with both the credential-free synthetic producer and Alpaca's authenticated `v2/test` Fakepaca stream (`FAKEPACA`) through the Rust extractor.
+- Make the Java loader catalog-neutral: select Hadoop, JDBC/SQL, or REST catalog with environment variables while keeping the table and Kafka frame contract unchanged.
+- Use UV for all Python execution and dependency locking; Rust is built through its own Docker image.
+- Validate locally, commit, and wait for approval before cloud infrastructure work.
+
 ### Checkpoint 2: Isolated cloud infrastructure
 
 - Create a new e2-micro VM, GCS warehouse, IAM, and private scale-to-zero UI.
@@ -60,5 +68,6 @@ Work does not proceed automatically past a checkpoint.
 - Kafka frames use the Alpaca bar WebSocket contract (`T`, `S`, `o`, `h`, `l`, `c`, `v`, `t`, `n`, `vw`).
 - The raw Iceberg table is append-only; it retains Kafka replays with a deterministic `payload_hash` so read views can deduplicate without discarding source deliveries.
 - The HadoopCatalog warehouse has exactly one writer: the long-lived loader on the VM. `flock` prevents duplicate local loader processes; all Cloud Run identities are read-only.
+- `ICEBERG_CATALOG_TYPE` selects `hadoop`, `jdbc`, or `rest`; catalog migration changes configuration and controlled metadata migration, not producer or loader wire contracts.
 - Reference the legacy implementation directly from `feat/tansu-iceberg-pipeline` at `e55c880`; do not keep a gitignored legacy copy.
 - Keep the old stack unchanged and paused until approved live validation of the new stack completes.

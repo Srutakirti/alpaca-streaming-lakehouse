@@ -7,12 +7,37 @@ with `HadoopCatalog`; Spark is not in the write path. All timestamps are UTC.
 ## Local synthetic run
 
 Build and validate the complete non-Spark flow with
-`mvn -f loader-java/pom.xml package` followed by
-`python scripts/run_local_stack.py`. It starts the official Tansu 0.6.0 Docker
+`mvn -f iceberg-loader-java/pom.xml package` followed by
+`uv run python scripts/run_local_stack.py --source synthetic`. It starts the official Tansu 0.6.0 Docker
 container backed by SQLite, verifies that `flock` refuses a second writer,
 publishes twelve Alpaca-compatible bar frames, and verifies the twelve raw
 Iceberg records through a separate Java read-only client. The default runtime
 directory is `.local-run/`.
+
+The Java loader uses `ICEBERG_CATALOG_TYPE=hadoop` by default. It can also be
+configured for `jdbc` or `rest` with `ICEBERG_CATALOG_URI`; producers and the
+Kafka frame contract remain unchanged across catalog types.
+
+For JDBC, provide the database driver on the loader classpath and optionally
+set `ICEBERG_JDBC_DRIVER`, `ICEBERG_CATALOG_USER`, and
+`ICEBERG_CATALOG_PASSWORD` (injected from a secret manager in cloud use).
+
+To move an existing table to a new JDBC or REST catalog without rewriting
+Parquet data, stop the single writer and run the included metadata-registration
+tool with `ICEBERG_SOURCE_*` describing the current catalog and `ICEBERG_*`
+describing the empty target catalog. It refuses to replace an existing target
+table. The loader is then restarted only with the target catalog configuration.
+
+Build the Rust extractor once with
+`docker build -t gce-hadoop-catalog-websocket-extractor:local websocket-extractor-rust`, then exercise Alpaca's credentialed always-on test stream with:
+
+```bash
+set -a; source .env; source .env.local; set +a
+uv run python scripts/run_local_stack.py --source fakepaca-wsr
+```
+
+It connects only to `wss://stream.data.alpaca.markets/v2/test` and subscribes
+only to `FAKEPACA`.
 
 For separate-process work, start the broker yourself, run
 `scripts/run_local_loader.sh` once, then run `python scripts/run_synthetic_local.py`.
@@ -25,5 +50,5 @@ pre-pulled image. The raw table is append-only; `payload_hash` makes exact
 Kafka replays explicit for downstream read views.
 
 Run Python unit tests with `uv run pytest`, and Java tests with
-`mvn -f loader-java/pom.xml test`. Kafka/Tansu acceptance validation starts the
+`mvn -f iceberg-loader-java/pom.xml test`. Kafka/Tansu acceptance validation starts the
 Docker broker and the long-lived loader as separate processes.

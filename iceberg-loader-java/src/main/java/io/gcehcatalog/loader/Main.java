@@ -1,6 +1,5 @@
 package io.gcehcatalog.loader;
 
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +16,7 @@ public final class Main {
   public static void main(String[] args) throws Exception {
     String broker = env("KAFKA_BROKER", "127.0.0.1:19092");
     String topic = env("KAFKA_TOPIC", "alpaca-bars");
-    String warehouse = env("ICEBERG_WAREHOUSE", Path.of(".local-run", "warehouse").toAbsolutePath().toUri().toString());
+    CatalogConfig catalogConfig = CatalogConfig.fromEnvironment();
     int maxRecords = Integer.parseInt(env("LOADER_MAX_RECORDS", "100"));
     Duration maxWait = Duration.ofSeconds(Long.parseLong(env("LOADER_MAX_SECONDS", "300")));
     Properties properties = new Properties();
@@ -31,7 +30,7 @@ public final class Main {
     AtomicBoolean running = new AtomicBoolean(true);
     Runtime.getRuntime().addShutdownHook(new Thread(() -> running.set(false), "loader-shutdown"));
     try (KafkaConsumer<String, byte[]> consumer = new KafkaConsumer<>(properties);
-         HadoopIcebergWriter writer = new HadoopIcebergWriter(warehouse)) {
+         IcebergWriter writer = new IcebergWriter(catalogConfig)) {
       consumer.subscribe(List.of(topic));
       List<AlpacaBar> batch = new ArrayList<>();
       long openedAt = System.nanoTime();
@@ -48,7 +47,7 @@ public final class Main {
     }
   }
 
-  private static void flush(KafkaConsumer<String, byte[]> consumer, HadoopIcebergWriter writer, List<AlpacaBar> batch) throws Exception {
+  private static void flush(KafkaConsumer<String, byte[]> consumer, IcebergWriter writer, List<AlpacaBar> batch) throws Exception {
     int inserted = writer.append(batch);
     consumer.commitSync();
     System.out.printf("committed_at=%s received=%d inserted=%d%n", java.time.Instant.now(), batch.size(), inserted);

@@ -1,0 +1,31 @@
+package io.gcehcatalog.loader;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+class CatalogConfigTest {
+  @Test void defaultsToLocalHadoopCatalog() {
+    CatalogConfig config = CatalogConfig.from(Map.of());
+    assertEquals(CatalogConfig.Type.HADOOP, config.type());
+    assertEquals("alpaca", config.name());
+  }
+
+  @Test void acceptsJdbcAndRestCatalogsWithoutChangingTheWarehouseContract() {
+    CatalogConfig jdbc = CatalogConfig.from(Map.of("ICEBERG_CATALOG_TYPE", "jdbc", "ICEBERG_CATALOG_URI", "jdbc:postgresql://catalog/iceberg", "ICEBERG_WAREHOUSE", "gs://warehouse"));
+    CatalogConfig rest = CatalogConfig.from(Map.of("ICEBERG_CATALOG_TYPE", "rest", "ICEBERG_CATALOG_URI", "https://catalog.example/v1", "ICEBERG_WAREHOUSE", "gs://warehouse"));
+    assertEquals(CatalogConfig.Type.JDBC, jdbc.type());
+    assertEquals(CatalogConfig.Type.REST, rest.type());
+  }
+
+  @Test void requiresUriForNonHadoopCatalogs() {
+    assertThrows(IllegalArgumentException.class, () -> CatalogConfig.from(Map.of("ICEBERG_CATALOG_TYPE", "rest")));
+  }
+
+  @Test void parsesAnIndependentSourceCatalogForMigration() {
+    CatalogConfig source = CatalogConfig.from(Map.of("ICEBERG_SOURCE_CATALOG_TYPE", "hadoop", "ICEBERG_SOURCE_WAREHOUSE", "gs://old-warehouse"), "ICEBERG_SOURCE_");
+    assertEquals(CatalogConfig.Type.HADOOP, source.type());
+    assertEquals("gs://old-warehouse", source.warehouse());
+  }
+}

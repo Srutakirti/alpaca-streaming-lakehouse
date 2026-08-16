@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the complete local acceptance flow against Tansu SQLite and HadoopCatalog."""
+"""Run a selected Alpaca-compatible producer through Tansu and the catalog-neutral loader."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import select
 import subprocess
 import sys
 import time
+from argparse import ArgumentParser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -19,7 +20,8 @@ from gce_hadoop_catalog.tansu_sqlite import TansuSqlite
 
 
 ROOT = Path(__file__).resolve().parents[1]
-JAR = ROOT / "loader-java/target/iceberg-loader-0.1.0.jar"
+JAR = ROOT / "iceberg-loader-java/target/iceberg-loader-0.1.0.jar"
+WSR_IMAGE = "gce-hadoop-catalog-websocket-extractor:local"
 
 
 def wait_for_writer_lock(lock_path: Path, loader: subprocess.Popen[str]) -> None:
@@ -39,9 +41,32 @@ def wait_for_writer_lock(lock_path: Path, loader: subprocess.Popen[str]) -> None
     raise TimeoutError("loader did not acquire its writer lock")
 
 
+def parser() -> ArgumentParser:
+    result = ArgumentParser()
+    result.add_argument("--source", choices=("synthetic", "fakepaca-wsr"), default="synthetic")
+    return result
+
+
+def start_wsr(environment: dict[str, str], port: int) -> subprocess.Popen[str]:
+    missing = [name for name in ("ALPACA_KEY", "ALPACA_SECRET") if not environment.get(name)]
+    if missing:
+        raise RuntimeError("fakepaca-wsr requires " + ", ".join(missing))
+    exists = subprocess.run(["docker", "image", "inspect", WSR_IMAGE], capture_output=True, check=False)
+    if exists.returncode:
+        raise RuntimeError("build WSR first: docker build -t " + WSR_IMAGE + " websocket-extractor-rust")
+    command = [
+        "docker", "run", "--rm", "--network", "host", "--name", f"gce-hcatalog-wsr-{port}",
+        "-e", "KAFKA_BROKER", "-e", "KAFKA_TOPIC", "-e", "ALPACA_KEY", "-e", "ALPACA_SECRET",
+        "-e", "ALPACA_WS_URI=wss://stream.data.alpaca.markets/v2/test",
+        "-e", "ALPACA_SYMBOLS=FAKEPACA", "-e", "DATA_IDLE_TIMEOUT=0", WSR_IMAGE,
+    ]
+    return subprocess.Popen(command, cwd=ROOT, env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True)
+
+
 def main() -> None:
+    source = parser().parse_args().source
     if not JAR.is_file():
-        raise SystemExit("build the loader first: mvn -f loader-java/pom.xml package")
+        raise SystemExit("build the loader first: mvn -f iceberg-loader-java/pom.xml package")
     settings = LocalSettings.from_environment()
     settings.prepare()
     warehouse = settings.warehouse_dir.resolve().as_uri()
@@ -51,7 +76,7 @@ def main() -> None:
         "KAFKA_TOPIC": settings.topic,
         "KAFKA_GROUP_ID": f"local-acceptance-{settings.broker_port}",
         "ICEBERG_WAREHOUSE": warehouse,
-        "LOADER_MAX_RECORDS": "12",
+        "LOADER_MAX_RECORDS": "12" if source == "synthetic" else "1",
         "LOADER_MAX_SECONDS": "300",
     }
     with TansuSqlite(settings):
@@ -64,6 +89,7 @@ def main() -> None:
             stderr=subprocess.DEVNULL,
             text=True,
         )
+        producer: subprocess.Popen[str] | None = None
         try:
             wait_for_writer_lock(settings.runtime_dir / "loader.lock", loader)
             # This must fail while the first process owns the writer lock.
@@ -78,8 +104,13 @@ def main() -> None:
             )
             if duplicate.returncode == 0:
                 raise RuntimeError("flock allowed a second loader")
-            publish(settings, generate_bars(start=default_start(), periods=6))
-            deadline = time.monotonic() + 45
+            expected = 12
+            if source == "synthetic":
+                publish(settings, generate_bars(start=default_start(), periods=6))
+            else:
+                expected = 1
+                producer = start_wsr(environment, settings.broker_port)
+            deadline = time.monotonic() + (45 if source == "synthetic" else 150)
             assert loader.stdout is not None
             committed = False
             while time.monotonic() < deadline:
@@ -92,12 +123,19 @@ def main() -> None:
                 if not line:
                     raise RuntimeError("loader exited before committing the synthetic batch")
                 print(line, end="")
-                if "received=12 inserted=12" in line:
+                if f"received={expected} inserted={expected}" in line:
                     committed = True
                     break
             if not committed:
                 raise TimeoutError("loader did not commit the synthetic batch")
         finally:
+            if producer is not None:
+                producer.terminate()
+                try:
+                    producer.wait(timeout=20)
+                except subprocess.TimeoutExpired:
+                    producer.kill()
+                    producer.wait()
             loader.terminate()
             try:
                 loader.wait(timeout=15)
@@ -105,7 +143,7 @@ def main() -> None:
                 loader.kill()
                 loader.wait()
         inspected = subprocess.run(
-            ["java", "-cp", str(JAR), "io.gcehcatalog.loader.TableInspector", warehouse],
+            ["java", "-cp", str(JAR), "io.gcehcatalog.loader.TableInspector"],
             cwd=ROOT,
             env=environment,
             text=True,
@@ -113,9 +151,9 @@ def main() -> None:
             check=True,
         )
         print(inspected.stdout, end="")
-        if inspected.stdout.strip() != "record_count=12":
+        if inspected.stdout.strip() != f"record_count={expected}":
             raise RuntimeError(f"unexpected table contents: {inspected.stdout.strip()}")
-    print("local_acceptance=passed flock=passed")
+    print(f"local_acceptance=passed source={source} flock=passed")
 
 
 if __name__ == "__main__":

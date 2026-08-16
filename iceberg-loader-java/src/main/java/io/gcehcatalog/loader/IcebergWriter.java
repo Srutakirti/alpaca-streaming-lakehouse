@@ -5,25 +5,25 @@ import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DataFiles;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.catalog.Namespace;
+import org.apache.iceberg.catalog.SupportsNamespaces;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.data.parquet.GenericParquetWriter;
-import org.apache.iceberg.hadoop.HadoopCatalog;
+import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.io.FileAppender;
 import org.apache.iceberg.io.OutputFile;
 import org.apache.iceberg.parquet.Parquet;
 import org.apache.iceberg.types.Types;
 
-/** Direct Iceberg Java writer: no Spark runtime is created. */
-public final class HadoopIcebergWriter implements AutoCloseable {
+/** Direct Iceberg Java writer: no Spark runtime is created and the catalog is configurable. */
+public final class IcebergWriter implements AutoCloseable {
   private static final Namespace NAMESPACE = Namespace.of("alpaca");
   private static final TableIdentifier TABLE = TableIdentifier.of(NAMESPACE, "bars_raw");
   static final Schema SCHEMA = new Schema(
@@ -40,12 +40,17 @@ public final class HadoopIcebergWriter implements AutoCloseable {
       Types.NestedField.required(11, "vw", Types.DoubleType.get()),
       Types.NestedField.required(12, "ingested_at", Types.StringType.get()));
 
-  private final HadoopCatalog catalog;
+  private final Catalog catalog;
+  private final SupportsNamespaces namespaces;
   private final Table table;
 
-  public HadoopIcebergWriter(String warehouse) {
-    this.catalog = new HadoopCatalog(new Configuration(), warehouse);
-    if (!catalog.namespaceExists(NAMESPACE)) catalog.createNamespace(NAMESPACE);
+  public IcebergWriter(CatalogConfig config) {
+    this.catalog = CatalogFactory.open(config);
+    if (!(catalog instanceof SupportsNamespaces supportsNamespaces)) {
+      throw new IllegalArgumentException("configured catalog does not support namespaces");
+    }
+    this.namespaces = supportsNamespaces;
+    if (!namespaces.namespaceExists(NAMESPACE)) namespaces.createNamespace(NAMESPACE);
     this.table = catalog.tableExists(TABLE)
         ? catalog.loadTable(TABLE)
         : catalog.createTable(TABLE, SCHEMA, PartitionSpec.unpartitioned());
@@ -89,10 +94,12 @@ public final class HadoopIcebergWriter implements AutoCloseable {
   }
 
   @Override public void close() {
-    try {
-      catalog.close();
-    } catch (java.io.IOException error) {
-      throw new IllegalStateException("could not close HadoopCatalog", error);
+    if (catalog instanceof AutoCloseable closeable) {
+      try {
+        closeable.close();
+      } catch (Exception error) {
+        throw new IllegalStateException("could not close Iceberg catalog", error);
+      }
     }
   }
 }
