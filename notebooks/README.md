@@ -12,11 +12,11 @@ uv run python scripts/run_local_stack.py --source synthetic --runtime-dir .local
 ICEBERG_WAREHOUSE="$PWD/.local-notebook/warehouse" uv run jupyter lab notebooks/
 ```
 
-Override the explored object without editing the notebook:
-
-```bash
-NOTEBOOK_NAMESPACE=alpaca NOTEBOOK_TABLE=bars_raw uv run jupyter lab notebooks/
-```
+The **Notebook configuration** cell exposes the catalog, warehouse, GCS mode,
+connector JAR, namespace, table, UTC bounds, and limit. Namespace/table/query
+changes take effect by rerunning that cell and the later query cells. Changing
+warehouse, catalog, GCS mode, or connector JAR requires a kernel restart before
+recreating Spark.
 
 The notebook finds the checkout when its kernel starts in the repository or a
 subdirectory. If your Jupyter server uses another working directory, set its
