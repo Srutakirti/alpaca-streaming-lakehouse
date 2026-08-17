@@ -14,10 +14,22 @@ public final class CatalogFactory {
 
   public static Catalog open(CatalogConfig config) {
     return switch (config.type()) {
-      case HADOOP -> new HadoopCatalog(new Configuration(), config.warehouse());
+      case HADOOP -> new HadoopCatalog(hadoopConfiguration(config), config.warehouse());
       case JDBC -> initializeJdbc(config);
       case REST -> initialize(new RESTCatalog(), config);
     };
+  }
+
+  static Configuration hadoopConfiguration(CatalogConfig config) {
+    Configuration configuration = new Configuration();
+    if (config.warehouse().startsWith("gs://")) {
+      // The shaded GCS Hadoop connector is supplied on the native VM runtime
+      // classpath. Authentication comes from the attached VM service account.
+      configuration.set("fs.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem");
+      configuration.set("fs.AbstractFileSystem.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS");
+      configuration.set("google.cloud.auth.type", "APPLICATION_DEFAULT");
+    }
+    return configuration;
   }
 
   private static Catalog initializeJdbc(CatalogConfig config) {

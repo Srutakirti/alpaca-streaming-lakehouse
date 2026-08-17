@@ -1,0 +1,19 @@
+[Unit]
+Description=GCE HadoopCatalog Tansu broker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gcehcatalog
+Group=gcehcatalog
+EnvironmentFile=/etc/gce-hadoop-catalog/runtime.env
+StateDirectory=gce-hadoop-catalog
+WorkingDirectory=/opt/gce-hadoop-catalog/current
+ExecStartPre=/usr/bin/mkdir -p /var/lib/gce-hadoop-catalog/tansu
+ExecStart=/opt/gce-hadoop-catalog/current/bin/tansu --kafka-listener-url tcp://127.0.0.1:19092 --kafka-advertised-listener-url tcp://127.0.0.1:19092 --storage-engine sqlite:///var/lib/gce-hadoop-catalog/tansu/tansu.sqlite
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

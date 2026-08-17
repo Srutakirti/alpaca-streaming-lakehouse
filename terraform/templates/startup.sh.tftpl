@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y --no-install-recommends ca-certificates curl openjdk-17-jre-headless libssl3 util-linux zlib1g
+
+id -u gcehcatalog >/dev/null 2>&1 || useradd --system --home /var/lib/gce-hadoop-catalog --shell /usr/sbin/nologin gcehcatalog
+install -d -o gcehcatalog -g gcehcatalog -m 0750 /var/lib/gce-hadoop-catalog /var/lib/gce-hadoop-catalog/runtime
+install -d -o root -g root -m 0755 /opt/gce-hadoop-catalog/releases /etc/gce-hadoop-catalog
+
+cat >/etc/gce-hadoop-catalog/runtime.env <<'EOF'
+KAFKA_BROKER=127.0.0.1:19092
+KAFKA_TOPIC=alpaca-bars
+PIPELINE_RUNTIME_DIR=/var/lib/gce-hadoop-catalog/runtime
+ICEBERG_CATALOG_TYPE=hadoop
+ICEBERG_CATALOG_NAME=local
+ICEBERG_WAREHOUSE=${warehouse_uri}
+ICEBERG_NAMESPACE=alpaca
+ICEBERG_TABLE=bars_raw
+LOADER_JAR=/opt/gce-hadoop-catalog/current/lib/iceberg-loader.jar
+GCS_CONNECTOR_JAR=/opt/gce-hadoop-catalog/current/lib/gcs-connector.jar
+LOADER_MAX_RECORDS=1000
+LOADER_MAX_SECONDS=300
+EOF
+chmod 0640 /etc/gce-hadoop-catalog/runtime.env
+chown root:gcehcatalog /etc/gce-hadoop-catalog/runtime.env

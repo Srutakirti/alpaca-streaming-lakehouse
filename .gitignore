@@ -6,3 +6,5 @@ __pycache__/
 .venv/
 iceberg-loader-java/target/
 websocket-extractor-rust/target/
+dist/
+terraform/.terraform/

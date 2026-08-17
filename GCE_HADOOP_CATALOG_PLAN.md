@@ -36,7 +36,7 @@ Work does not proceed automatically past a checkpoint.
 - Keep the synthetic producer and add the Rust WebSocket extractor from `feat/tansu-iceberg-pipeline` at `e55c880` as a maintained component in this branch.
 - Validate the same loader with both the credential-free synthetic producer and Alpaca's authenticated `v2/test` Fakepaca stream (`FAKEPACA`) through the Rust extractor.
 - Make the Java loader catalog-neutral: select Hadoop, JDBC/SQL, or REST catalog with environment variables while keeping the table and Kafka frame contract unchanged.
-- Use UV for all Python execution and dependency locking; Rust is built through its own Docker image.
+- Use UV for all Python execution and dependency locking; Rust is built natively and only its release executable is deployed.
 - Validate locally, commit, and wait for approval before cloud infrastructure work.
 
 ### Checkpoint 1N: Read-only PySpark catalog exploration
@@ -48,7 +48,9 @@ Work does not proceed automatically past a checkpoint.
 
 ### Checkpoint 2: Isolated cloud infrastructure
 
-- Create a new e2-micro VM, GCS warehouse, IAM, and private scale-to-zero UI.
+- Create a new e2-micro VM, GCS warehouse, IAM, and a Docker-free native runtime.
+- The VM receives only the pinned Tansu executable, Rust `wsr` release executable, shaded Java loader JAR, shaded GCS connector JAR, and systemd units; it has no Docker, Maven, Rust, UV, or Spark runtime.
+- Defer the private scale-to-zero UI until a later explicitly approved checkpoint.
 - Do not use Cloud SQL or modify existing resources.
 - Validate, commit, and wait for approval.
 

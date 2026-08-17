@@ -1,0 +1,13 @@
+[Unit]
+Description=Create the GCE HadoopCatalog Tansu topic
+After=tansu.service
+Requires=tansu.service
+
+[Service]
+Type=oneshot
+User=gcehcatalog
+Group=gcehcatalog
+EnvironmentFile=/etc/gce-hadoop-catalog/runtime.env
+WorkingDirectory=/opt/gce-hadoop-catalog/current
+ExecStart=/opt/gce-hadoop-catalog/current/bin/ensure-topic
+RemainAfterExit=yes

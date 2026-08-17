@@ -1,0 +1,17 @@
+[Unit]
+Description=GCE HadoopCatalog Java loader
+After=tansu-topic.service
+Requires=tansu-topic.service
+
+[Service]
+Type=simple
+User=gcehcatalog
+Group=gcehcatalog
+EnvironmentFile=/etc/gce-hadoop-catalog/runtime.env
+WorkingDirectory=/opt/gce-hadoop-catalog/current
+ExecStart=/opt/gce-hadoop-catalog/current/scripts/run_loader.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
