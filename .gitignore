@@ -8,3 +8,4 @@ iceberg-loader-java/target/
 websocket-extractor-rust/target/
 dist/
 terraform/.terraform/
+terraform/*.tfstate*

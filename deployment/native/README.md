@@ -20,7 +20,7 @@ TANSU_BINARY=/absolute/path/to/tansu-0.6.0-linux-x86_64 \
 
 The output is `dist/gce-hadoop-catalog-<git-sha>.tar.gz`. It contains only the VM runtime files and a `SHA256SUMS` manifest. `build_release.sh` never overwrites an existing bundle.
 
-The Rust binary dynamically links OpenSSL and zlib. The Terraform startup script installs the corresponding Ubuntu runtime packages (`libssl3` and `zlib1g`).
+The Rust binary dynamically links OpenSSL and zlib. The Terraform bootstrap requests `libssl3` and `zlib1g`; Ubuntu 24.04 resolves the OpenSSL runtime as `libssl3t64`, which provides `libssl.so.3`.
 
 ## Install on the VM
 
