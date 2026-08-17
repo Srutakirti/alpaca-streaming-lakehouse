@@ -12,6 +12,17 @@ def test_local_catalog_configuration_is_hadoop_and_utc() -> None:
     assert configuration["spark.sql.catalog.alpaca.type"] == "hadoop"
     assert configuration["spark.sql.catalog.alpaca.warehouse"] == "file:///tmp/warehouse"
     assert configuration["spark.sql.session.timeZone"] == "UTC"
+    assert configuration["spark.sql.caseSensitive"] == "true"
+
+
+def test_default_local_warehouse_uses_the_notebook_repository_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("ICEBERG_WAREHOUSE", raising=False)
+
+    settings = settings_from_environment(tmp_path)
+
+    assert settings.warehouse == (tmp_path / ".local-notebook" / "warehouse").as_uri()
 
 
 def test_gcs_catalog_requires_explicit_switch(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -25,9 +25,11 @@ class SparkCatalogSettings:
         return f"{self.catalog_name}.{self.namespace}.{self.table}"
 
 
-def settings_from_environment() -> SparkCatalogSettings:
+def settings_from_environment(base_directory: Path | None = None) -> SparkCatalogSettings:
+    """Read notebook settings, resolving the default local warehouse from ``base_directory``."""
     raw_warehouse = os.environ.get("ICEBERG_WAREHOUSE")
-    warehouse = raw_warehouse or (Path(".local-notebook") / "warehouse").resolve().as_uri()
+    local_base = (base_directory or Path.cwd()).resolve()
+    warehouse = raw_warehouse or (local_base / ".local-notebook" / "warehouse").as_uri()
     if "://" not in warehouse:
         warehouse = Path(warehouse).resolve().as_uri()
     gcs_enabled = os.environ.get("NOTEBOOK_ENABLE_GCS", "false").lower() == "true"
@@ -52,6 +54,10 @@ def spark_configuration(settings: SparkCatalogSettings) -> dict[str, str]:
         f"{prefix}.type": "hadoop",
         f"{prefix}.warehouse": settings.warehouse,
         "spark.sql.session.timeZone": "UTC",
+        # Alpaca's wire contract intentionally has both `T` (event type) and
+        # `t` (event timestamp). Spark otherwise resolves identifiers without
+        # case and cannot distinguish these source columns.
+        "spark.sql.caseSensitive": "true",
         "spark.jars.packages": ICEBERG_RUNTIME_PACKAGE,
     }
     if settings.warehouse.startswith("gs://"):

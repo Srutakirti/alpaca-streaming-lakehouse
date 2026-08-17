@@ -18,6 +18,14 @@ Override the explored object without editing the notebook:
 NOTEBOOK_NAMESPACE=alpaca NOTEBOOK_TABLE=bars_raw uv run jupyter lab notebooks/
 ```
 
+The notebook finds the checkout when its kernel starts in the repository or a
+subdirectory. If your Jupyter server uses another working directory, set its
+explicit source location before starting Jupyter:
+
+```bash
+GCE_HADOOP_CATALOG_REPOSITORY="$PWD" uv run jupyter lab notebooks/
+```
+
 GCS is intentionally disabled unless both settings are supplied:
 
 ```bash
