@@ -64,6 +64,8 @@ The extractor reads `ALPACA_KEY` and `ALPACA_SECRET` from uncommitted `.env`
 and `.env.local`. Use `scripts/local_fakepaca_status.sh` to inspect the two
 containers, Java loader process, and shared runtime values. Set `LOADER_MAX_RECORDS` or
 `LOADER_MAX_SECONDS` before launching the loader to change its commit boundary.
+The complete component-by-component guide is in
+[`docs/runbooks/local-fakepaca-component-testing.md`](docs/runbooks/local-fakepaca-component-testing.md).
 
 Docker must be running and have the `ghcr.io/tansu-io/tansu:0.6.0` image
 available. The broker is configured with a SQLite storage URI, a loopback-only
