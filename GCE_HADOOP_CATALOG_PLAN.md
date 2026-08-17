@@ -39,6 +39,13 @@ Work does not proceed automatically past a checkpoint.
 - Use UV for all Python execution and dependency locking; Rust is built through its own Docker image.
 - Validate locally, commit, and wait for approval before cloud infrastructure work.
 
+### Checkpoint 1N: Read-only PySpark catalog exploration
+
+- Add an output-cleared notebook for persistent local HadoopCatalog exploration.
+- Configure its namespace, table, query range, and result limit through environment variables.
+- Support a deliberate GCS HadoopCatalog mode using the GCS connector and Application Default Credentials; keep Spark read-only and retain no cloud credentials in the repository.
+- Validate the notebook against a locally persistent warehouse, commit, and wait for approval before cloud infrastructure work.
+
 ### Checkpoint 2: Isolated cloud infrastructure
 
 - Create a new e2-micro VM, GCS warehouse, IAM, and private scale-to-zero UI.

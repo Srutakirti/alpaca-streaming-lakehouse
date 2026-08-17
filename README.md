@@ -55,3 +55,9 @@ Kafka replays explicit for downstream read views.
 Run Python unit tests with `uv run pytest`, and Java tests with
 `mvn -f iceberg-loader-java/pom.xml test`. Kafka/Tansu acceptance validation starts the
 Docker broker and the long-lived loader as separate processes.
+
+## Read-only PySpark exploration
+
+The checked-in notebook in `notebooks/` opens the same HadoopCatalog for local
+or explicitly enabled GCS exploration. See `notebooks/README.md`; Spark is not
+part of the loader or write path.
