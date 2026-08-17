@@ -46,6 +46,25 @@ For separate-process work, start the broker yourself, run
 `scripts/run_local_loader.sh` once, then run `python scripts/run_synthetic_local.py`.
 The producer only publishes to an already-running broker.
 
+## Live local Fakepaca components
+
+The scripts below run the broker, Java loader, and Rust Fakepaca extractor as
+separate foreground processes. They share a temporary Tansu SQLite directory
+and retain Iceberg data in `.local-notebook/warehouse`. Build the Java loader
+and Rust image once, then use separate terminals in this order:
+
+```bash
+scripts/run_local_tansu.sh
+scripts/ensure_local_fakepaca_topic.sh
+scripts/run_local_fakepaca_loader.sh
+scripts/run_local_fakepaca_extractor.sh
+```
+
+The extractor reads `ALPACA_KEY` and `ALPACA_SECRET` from uncommitted `.env`
+and `.env.local`. Use `scripts/local_fakepaca_status.sh` to inspect the two
+containers, Java loader process, and shared runtime values. Set `LOADER_MAX_RECORDS` or
+`LOADER_MAX_SECONDS` before launching the loader to change its commit boundary.
+
 Docker must be running and have the `ghcr.io/tansu-io/tansu:0.6.0` image
 available. The broker is configured with a SQLite storage URI, a loopback-only
 listener, and no cloud credentials. Set `TANSU_IMAGE` to use a different
