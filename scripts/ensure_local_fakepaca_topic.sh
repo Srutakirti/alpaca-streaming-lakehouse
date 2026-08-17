@@ -5,6 +5,7 @@ set -euo pipefail
 local_topic_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$local_topic_root/scripts/local_fakepaca_env.sh"
 
+export PYTHONPATH="$local_topic_root/src${PYTHONPATH:+:$PYTHONPATH}"
 exec uv run python -c '
 from gce_hadoop_catalog.config import LocalSettings
 from gce_hadoop_catalog.runtime import ensure_topic
