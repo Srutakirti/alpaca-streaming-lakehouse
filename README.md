@@ -12,7 +12,10 @@ Build and validate the complete non-Spark flow with
 container backed by SQLite, verifies that `flock` refuses a second writer,
 publishes twelve Alpaca-compatible bar frames, and verifies the twelve raw
 Iceberg records through a separate Java read-only client. The default runtime
-directory is `.local-run/`.
+directory is a fresh temporary directory, so each acceptance run starts with an
+empty Tansu SQLite database and Iceberg warehouse. Use `--runtime-dir PATH` or
+`PIPELINE_RUNTIME_DIR=PATH` only when you intentionally want to retain state
+for debugging.
 
 The Java loader uses `ICEBERG_CATALOG_TYPE=hadoop` by default. It can also be
 configured for `jdbc` or `rest` with `ICEBERG_CATALOG_URI`; producers and the

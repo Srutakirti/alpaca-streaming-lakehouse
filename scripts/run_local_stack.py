@@ -7,6 +7,7 @@ import os
 import select
 import subprocess
 import sys
+import tempfile
 import time
 from argparse import ArgumentParser
 from pathlib import Path
@@ -44,6 +45,11 @@ def wait_for_writer_lock(lock_path: Path, loader: subprocess.Popen[str]) -> None
 def parser() -> ArgumentParser:
     result = ArgumentParser()
     result.add_argument("--source", choices=("synthetic", "fakepaca-wsr"), default="synthetic")
+    result.add_argument(
+        "--runtime-dir",
+        type=Path,
+        help="persistent runtime directory; defaults to a fresh temporary directory for each acceptance run",
+    )
     return result
 
 
@@ -64,22 +70,29 @@ def start_wsr(environment: dict[str, str], port: int) -> subprocess.Popen[str]:
 
 
 def main() -> None:
-    source = parser().parse_args().source
+    arguments = parser().parse_args()
+    source = arguments.source
     if not JAR.is_file():
         raise SystemExit("build the loader first: mvn -f iceberg-loader-java/pom.xml package")
-    settings = LocalSettings.from_environment()
+    explicit_runtime = arguments.runtime_dir or (
+        Path(os.environ["PIPELINE_RUNTIME_DIR"]) if "PIPELINE_RUNTIME_DIR" in os.environ else None
+    )
+    temporary_runtime = None if explicit_runtime else tempfile.TemporaryDirectory(prefix="gce-hcatalog-acceptance-")
+    runtime_dir = explicit_runtime or Path(temporary_runtime.name)
+    settings = LocalSettings(runtime_dir=runtime_dir.resolve())
     settings.prepare()
     warehouse = settings.warehouse_dir.resolve().as_uri()
     environment = os.environ | {
         "PIPELINE_RUNTIME_DIR": str(settings.runtime_dir),
         "KAFKA_BROKER": settings.broker_url,
         "KAFKA_TOPIC": settings.topic,
-        "KAFKA_GROUP_ID": f"local-acceptance-{settings.broker_port}",
+        "KAFKA_GROUP_ID": f"local-acceptance-{settings.runtime_dir.name}",
         "ICEBERG_WAREHOUSE": warehouse,
         "LOADER_MAX_RECORDS": "12" if source == "synthetic" else "1",
         "LOADER_MAX_SECONDS": "300",
     }
-    with TansuSqlite(settings):
+    try:
+      with TansuSqlite(settings):
         ensure_topic(settings)
         loader = subprocess.Popen(
             [str(ROOT / "scripts/run_local_loader.sh")],
@@ -153,7 +166,10 @@ def main() -> None:
         print(inspected.stdout, end="")
         if inspected.stdout.strip() != f"record_count={expected}":
             raise RuntimeError(f"unexpected table contents: {inspected.stdout.strip()}")
-    print(f"local_acceptance=passed source={source} flock=passed")
+      print(f"local_acceptance=passed source={source} flock=passed")
+    finally:
+        if temporary_runtime is not None:
+            temporary_runtime.cleanup()
 
 
 if __name__ == "__main__":
