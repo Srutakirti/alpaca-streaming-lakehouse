@@ -11,6 +11,15 @@ class CatalogConfigTest {
     CatalogConfig config = CatalogConfig.from(Map.of());
     assertEquals(CatalogConfig.Type.HADOOP, config.type());
     assertEquals("alpaca", config.name());
+    assertEquals("alpaca", config.namespace());
+    assertEquals("bars_raw", config.table());
+  }
+
+  @Test void readsNamespaceAndTableSelection() {
+    CatalogConfig config = CatalogConfig.from(Map.of(
+        "ICEBERG_NAMESPACE", "alpaca_candidate", "ICEBERG_TABLE", "bars_direct"));
+    assertEquals("alpaca_candidate", config.namespace());
+    assertEquals("bars_direct", config.table());
   }
 
   @Test void acceptsJdbcAndRestCatalogsWithoutChangingTheWarehouseContract() {

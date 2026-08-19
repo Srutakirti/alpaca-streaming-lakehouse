@@ -24,8 +24,6 @@ import org.apache.iceberg.types.Types;
 
 /** Direct Iceberg Java writer: no Spark runtime is created and the catalog is configurable. */
 public final class IcebergWriter implements AutoCloseable {
-  private static final Namespace NAMESPACE = Namespace.of("alpaca");
-  private static final TableIdentifier TABLE = TableIdentifier.of(NAMESPACE, "bars_raw");
   static final Schema SCHEMA = new Schema(
       Types.NestedField.required(1, "payload_hash", Types.StringType.get()),
       Types.NestedField.required(2, "T", Types.StringType.get()),
@@ -50,10 +48,12 @@ public final class IcebergWriter implements AutoCloseable {
       throw new IllegalArgumentException("configured catalog does not support namespaces");
     }
     this.namespaces = supportsNamespaces;
-    if (!namespaces.namespaceExists(NAMESPACE)) namespaces.createNamespace(NAMESPACE);
-    this.table = catalog.tableExists(TABLE)
-        ? catalog.loadTable(TABLE)
-        : catalog.createTable(TABLE, SCHEMA, PartitionSpec.unpartitioned());
+    Namespace namespace = Namespace.of(config.namespace());
+    TableIdentifier tableIdentifier = TableIdentifier.of(namespace, config.table());
+    if (!namespaces.namespaceExists(namespace)) namespaces.createNamespace(namespace);
+    this.table = catalog.tableExists(tableIdentifier)
+        ? catalog.loadTable(tableIdentifier)
+        : catalog.createTable(tableIdentifier, SCHEMA, PartitionSpec.unpartitioned());
   }
 
   /** Appends immutable raw Alpaca deliveries; downstream views can use payload_hash to deduplicate replays. */

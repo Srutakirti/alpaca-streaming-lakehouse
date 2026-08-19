@@ -5,7 +5,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /** Catalog-neutral loader configuration. The table contract does not change between catalog types. */
-public record CatalogConfig(Type type, String name, String warehouse, String uri, String jdbcDriver, String jdbcUser, String jdbcPassword) {
+public record CatalogConfig(Type type, String name, String warehouse, String namespace, String table, String uri, String jdbcDriver, String jdbcUser, String jdbcPassword) {
   public enum Type { HADOOP, JDBC, REST }
 
   public static CatalogConfig fromEnvironment() {
@@ -33,6 +33,8 @@ public record CatalogConfig(Type type, String name, String warehouse, String uri
         type,
         environment.getOrDefault(prefix + "CATALOG_NAME", "alpaca"),
         warehouse,
+        environment.getOrDefault(prefix + "NAMESPACE", "alpaca"),
+        environment.getOrDefault(prefix + "TABLE", "bars_raw"),
         uri,
         environment.getOrDefault(prefix + "JDBC_DRIVER", ""),
         environment.getOrDefault(prefix + "CATALOG_USER", ""),

@@ -1,0 +1,15 @@
+[Unit]
+Description=GCE HadoopCatalog direct Alpaca Rust extractor
+After=tansu-topic.service iceberg-loader.service
+Requires=tansu-topic.service
+
+[Service]
+Type=simple
+User=gcehcatalog
+Group=gcehcatalog
+EnvironmentFile=/etc/gce-hadoop-catalog/runtime.env
+EnvironmentFile=-/etc/gce-hadoop-catalog/alpaca.env
+WorkingDirectory=/opt/gce-hadoop-catalog/current
+ExecStart=/opt/gce-hadoop-catalog/current/bin/wsr
+Restart=on-failure
+RestartSec=5
