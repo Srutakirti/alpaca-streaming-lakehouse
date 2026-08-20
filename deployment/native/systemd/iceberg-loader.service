@@ -12,6 +12,8 @@ WorkingDirectory=/opt/gce-hadoop-catalog/current
 ExecStart=/opt/gce-hadoop-catalog/current/scripts/run_loader.sh
 Restart=on-failure
 RestartSec=5
+MemoryHigh=500M
+MemoryMax=600M
 
 [Install]
 WantedBy=multi-user.target

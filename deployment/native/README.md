@@ -38,4 +38,6 @@ The installation verifies hashes, atomically updates the `current` symlink, and 
 
 `runtime.env.example` documents every non-secret runtime setting. The VM uses its attached service account and Application Default Credentials to access the GCS warehouse; no service-account key is copied into the bundle.
 
+The loader runs with a bounded one-record Kafka poll and a 1,000-bar maximum write batch. `LOADER_JAVA_OPTS` sets its JVM heap; the e2-micro default is `-Xms128m -Xmx384m`. Its systemd unit additionally applies `MemoryHigh=500M` and `MemoryMax=600M` as protection against a runaway process.
+
 For the limited direct-data candidate, create `/etc/gce-hadoop-catalog/alpaca.env` from `alpaca.env.example`. `alpaca-extractor.service` is intentionally disabled and separate from `fakepaca-extractor.service`; it must be started manually with an explicit small symbol set.

@@ -56,6 +56,8 @@ ICEBERG_NAMESPACE         Destination Iceberg namespace
 ICEBERG_TABLE             Destination Iceberg table
 LOADER_MAX_RECORDS        Commit threshold by records
 LOADER_MAX_SECONDS        Commit threshold by elapsed time
+LOADER_MAX_POLL_RECORDS   Kafka records returned per poll; fixed at 1 for safe bounded source processing
+LOADER_JAVA_OPTS          JVM sizing for the loader, normally -Xms128m -Xmx384m on the e2-micro
 ```
 
 `/etc/gce-hadoop-catalog/fakepaca.env` and `alpaca.env` contain only extractor-specific values. They hold `ALPACA_KEY` and `ALPACA_SECRET`, which must never be committed, copied into a release archive, or printed in logs. Keep both files `root:gcehcatalog` with mode `0640`.
@@ -120,6 +122,39 @@ For a machine-readable single-line summary:
 
 ```bash
 free -b | awk '/^Mem:/ {printf "total=%.1f MiB used=%.1f MiB available=%.1f MiB\n", $2/1048576, $3/1048576, $7/1048576}'
+```
+
+## Cloud Logging
+
+The VM uses Google Cloud Ops Agent to send the systemd journal to Cloud
+Logging. The logging-only configuration avoids duplicate `/var/log/syslog`
+ingestion and disables host metrics collection to limit e2-micro overhead:
+
+```yaml
+logging:
+  receivers:
+    gce_hadoop_catalog_journal:
+      type: systemd_journald
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: []
+      gce_hadoop_catalog:
+        receivers: [gce_hadoop_catalog_journal]
+metrics:
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: []
+```
+
+This retains Cloud Logging for every systemd service but removes Ops Agent
+CPU, memory, disk, network, and process metrics from Cloud Monitoring. Local
+memory inspection remains available through `free -h` and `systemctl show`.
+
+```bash
+sudo systemctl status google-cloud-ops-agent-fluent-bit.service --no-pager
+sudo journalctl -u google-cloud-ops-agent -n 100 --no-pager
 ```
 
 ## Safe release changes

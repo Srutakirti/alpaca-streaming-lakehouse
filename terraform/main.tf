@@ -69,6 +69,18 @@ resource "google_storage_bucket_iam_member" "release_reader" {
   member = "serviceAccount:${google_service_account.vm.email}"
 }
 
+resource "google_project_iam_member" "vm_logs_writer" {
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.vm.email}"
+}
+
+resource "google_project_iam_member" "vm_metrics_writer" {
+  project = var.project_id
+  role    = "roles/monitoring.metricWriter"
+  member  = "serviceAccount:${google_service_account.vm.email}"
+}
+
 resource "google_compute_instance" "pipeline" {
   name         = "${var.resource_prefix}-vm"
   machine_type = var.machine_type

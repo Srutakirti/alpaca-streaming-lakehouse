@@ -164,7 +164,11 @@ def main() -> None:
             check=True,
         )
         print(inspected.stdout, end="")
-        if inspected.stdout.strip() != f"record_count={expected}":
+        record_count = next(
+            (line for line in inspected.stdout.splitlines() if line.startswith("record_count=")),
+            None,
+        )
+        if record_count != f"record_count={expected}":
             raise RuntimeError(f"unexpected table contents: {inspected.stdout.strip()}")
       print(f"local_acceptance=passed source={source} flock=passed")
     finally:
