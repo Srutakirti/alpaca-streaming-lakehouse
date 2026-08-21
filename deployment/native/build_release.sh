@@ -32,7 +32,7 @@ curl --fail --location --silent --show-error "$gcs_connector_url" -o "$release_d
 cp "$release_root/deployment/native/ensure-topic.sh" "$release_dir/bin/ensure-topic"
 cp "$release_root/deployment/native/install_release.sh" "$release_dir/bin/install-release"
 cp "$release_root/deployment/native/run_synthetic.sh" "$release_dir/bin/run-synthetic"
-cp "$release_root/deployment/native/systemd/"*.service "$release_dir/systemd/"
+cp "$release_root/deployment/native/systemd/"*.service "$release_root/deployment/native/systemd/"*.timer "$release_dir/systemd/"
 cp "$release_root/scripts/run_local_loader.sh" "$release_dir/scripts/run_loader.sh"
 chmod 0755 "$release_dir/bin/"* "$release_dir/scripts/run_loader.sh"
 

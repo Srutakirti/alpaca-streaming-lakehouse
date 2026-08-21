@@ -1,7 +1,7 @@
 [Unit]
 Description=GCE HadoopCatalog direct Alpaca Rust extractor
 After=tansu-topic.service iceberg-loader.service
-Requires=tansu-topic.service
+Requires=tansu-topic.service iceberg-loader.service
 
 [Service]
 Type=simple

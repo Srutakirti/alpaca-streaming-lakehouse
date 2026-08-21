@@ -40,4 +40,4 @@ The installation verifies hashes, atomically updates the `current` symlink, and 
 
 The loader runs with a bounded one-record Kafka poll and a 1,000-bar maximum write batch. `LOADER_JAVA_OPTS` sets its JVM heap; the e2-micro default is `-Xms128m -Xmx384m`. Its systemd unit additionally applies `MemoryHigh=500M` and `MemoryMax=600M` as protection against a runaway process.
 
-For the limited direct-data candidate, create `/etc/gce-hadoop-catalog/alpaca.env` from `alpaca.env.example`. `alpaca-extractor.service` is intentionally disabled and separate from `fakepaca-extractor.service`; it must be started manually with an explicit small symbol set.
+For the limited direct-data candidate, create `/etc/gce-hadoop-catalog/alpaca.env` from `alpaca.env.example`. `alpaca-extractor.service` is separate from `fakepaca-extractor.service` and has a matching `alpaca-extractor.timer`. Enabling that timer starts the direct extractor at 09:30 on each weekday in `America/New_York`; DST is handled by systemd. The simple weekday schedule does not skip US exchange holidays. It never enables Fakepaca.

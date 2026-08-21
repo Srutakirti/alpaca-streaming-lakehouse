@@ -21,7 +21,8 @@ Persistent state and configuration are deliberately outside that release directo
 | `tansu-topic.service` | Creates the configured topic if it does not exist. | `bin/ensure-topic` → Java `TopicProvisioner` | `runtime.env` |
 | `iceberg-loader.service` | Consumes bars, batches them, and appends Iceberg data to GCS. | `scripts/run_loader.sh` → Java `Main` | `runtime.env` |
 | `fakepaca-extractor.service` | Test-only Alpaca `/v2/test` WebSocket extractor. | `bin/wsr` | `runtime.env`, then `fakepaca.env` |
-| `alpaca-extractor.service` | Limited direct-Alpaca WebSocket extractor. Disabled by default. | `bin/wsr` | `runtime.env`, then `alpaca.env` |
+| `alpaca-extractor.service` | Limited direct-Alpaca WebSocket extractor. Started manually or by its weekday timer. | `bin/wsr` | `runtime.env`, then `alpaca.env` |
+| `alpaca-extractor.timer` | Starts the direct extractor at 09:30 New York time on weekdays. | systemd timer | none |
 
 For extractor services, the second environment file overrides any duplicate key in `runtime.env`.
 
@@ -35,6 +36,24 @@ Tansu broker
 ```
 
 `tansu-topic.service` is a one-shot service. The loader and extractors are long-running. Extractors require the topic service, while the loader requires the topic service as well. Each service uses `Restart=on-failure`; systemd retries it after a crash.
+
+## Weekday direct-Alpaca schedule
+
+`alpaca-extractor.timer` uses `America/New_York`, so it follows the exchange's daylight-saving-time changes while the extractor records timestamps in UTC. It starts at 09:30 Monday through Friday. This intentionally simple schedule does not know US exchange holidays; on a holiday the extractor receives no bars and exits after its configured idle timeout.
+
+After installing a release containing the timer, inspect the next trigger and enable it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now alpaca-extractor.timer
+systemctl list-timers alpaca-extractor.timer --all
+```
+
+The timer starts the complete dependency chain (Tansu, topic provisioner, loader, then direct extractor). To prevent the next scheduled start without changing any configuration, run:
+
+```bash
+sudo systemctl disable --now alpaca-extractor.timer
+```
 
 ## Code entry points
 

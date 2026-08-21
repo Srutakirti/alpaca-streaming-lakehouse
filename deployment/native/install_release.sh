@@ -33,6 +33,6 @@ if [[ -e "$target" ]]; then
 fi
 mv "$release_dir" "$target"
 ln -sfn "$target" /opt/gce-hadoop-catalog/current
-install -m 0644 "$target"/systemd/*.service /etc/systemd/system/
+install -m 0644 "$target"/systemd/*.service "$target"/systemd/*.timer /etc/systemd/system/
 systemctl daemon-reload
 printf 'installed_release=%s\n' "$target"

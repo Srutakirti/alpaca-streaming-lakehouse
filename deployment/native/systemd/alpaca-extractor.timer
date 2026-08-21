@@ -1,0 +1,11 @@
+[Unit]
+Description=Start the GCE HadoopCatalog direct Alpaca extractor at the weekday market open
+
+[Timer]
+# Keep the market-time trigger DST-aware; application data remains UTC.
+OnCalendar=Mon..Fri *-*-* 09:30:00 America/New_York
+Persistent=false
+Unit=alpaca-extractor.service
+
+[Install]
+WantedBy=timers.target
