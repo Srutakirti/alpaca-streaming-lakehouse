@@ -145,31 +145,18 @@ free -b | awk '/^Mem:/ {printf "total=%.1f MiB used=%.1f MiB available=%.1f MiB\
 
 ## Cloud Logging
 
-The VM uses Google Cloud Ops Agent to send the systemd journal to Cloud
-Logging. The logging-only configuration avoids duplicate `/var/log/syslog`
-ingestion and disables host metrics collection to limit e2-micro overhead:
+The VM uses Google Cloud Ops Agent to send selected systemd journal events to
+Cloud Logging. The source template is
+[`gce-hadoop-catalog-logging.yaml`](../../deployment/ops-agent/gce-hadoop-catalog-logging.yaml).
+It avoids duplicate `/var/log/syslog` ingestion, drops unrelated host journal
+traffic and Kafka telemetry-registration noise, and disables host metrics
+collection to limit e2-micro overhead. The receiver retains pipeline units and
+relevant PID-1 lifecycle events only. The complete, version-controlled YAML
+must be used instead of copying a partial snippet.
 
-```yaml
-logging:
-  receivers:
-    gce_hadoop_catalog_journal:
-      type: systemd_journald
-  service:
-    pipelines:
-      default_pipeline:
-        receivers: []
-      gce_hadoop_catalog:
-        receivers: [gce_hadoop_catalog_journal]
-metrics:
-  service:
-    pipelines:
-      default_pipeline:
-        receivers: []
-```
-
-This retains Cloud Logging for every systemd service but removes Ops Agent
-CPU, memory, disk, network, and process metrics from Cloud Monitoring. Local
-memory inspection remains available through `free -h` and `systemctl show`.
+This removes Ops Agent CPU, memory, disk, network, and process metrics from
+Cloud Monitoring. Local memory inspection remains available through `free -h`
+and `systemctl show`.
 
 ```bash
 sudo systemctl status google-cloud-ops-agent-fluent-bit.service --no-pager
@@ -180,4 +167,4 @@ sudo journalctl -u google-cloud-ops-agent -n 100 --no-pager
 
 Before installing a new release, stop the extractor first so no new bars arrive. Stop the loader and Tansu only for the short installation window. Kafka records remain in Tansu SQLite and the loader commits Kafka offsets only after an Iceberg snapshot succeeds, so a stopped loader resumes from its last committed position.
 
-After the installer updates `/opt/gce-hadoop-catalog/current`, start services in dependency order and verify logs before starting an extractor. Never enable the direct-Alpaca extractor automatically until production scheduling is explicitly approved.
+After the installer updates `/opt/gce-hadoop-catalog/current`, start services in dependency order and verify logs before starting an extractor. The approved weekday direct-Alpaca schedule is managed by `alpaca-extractor.timer`; keep Fakepaca unscheduled.

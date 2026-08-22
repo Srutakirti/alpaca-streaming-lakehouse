@@ -1,0 +1,37 @@
+# Copy to /etc/google-cloud-ops-agent/config.yaml on the VM, then restart
+# google-cloud-ops-agent. This keeps application journal events while excluding
+# unrelated host journal traffic and one known Kafka INFO message.
+logging:
+  receivers:
+    gce_hadoop_catalog_journal:
+      type: systemd_journald
+  processors:
+    exclude_non_pipeline_journal:
+      type: exclude_logs
+      match_any:
+        - 'jsonPayload._SYSTEMD_UNIT !~ "^(tansu.service|tansu-topic.service|iceberg-loader.service|alpaca-extractor.service|alpaca-extractor.timer|fakepaca-extractor.service)$" AND
+           (jsonPayload.SYSLOG_IDENTIFIER != "systemd" OR
+            jsonPayload.MESSAGE !~ "(alpaca-extractor|iceberg-loader|tansu)")'
+    exclude_loader_kafka_telemetry:
+      type: exclude_logs
+      match_any:
+        - 'jsonPayload._SYSTEMD_UNIT = "iceberg-loader.service" AND
+           jsonPayload.MESSAGE =~ "ClientTelemetryReporter - Client telemetry registered"'
+  service:
+    pipelines:
+      # Override the built-in /var/log/syslog collector.
+      default_pipeline:
+        receivers: []
+      gce_hadoop_catalog:
+        receivers: [gce_hadoop_catalog_journal]
+        processors:
+          - exclude_non_pipeline_journal
+          - exclude_loader_kafka_telemetry
+
+# Preserve the existing low-ingestion configuration. The Ops Agent's metrics
+# sub-process remains installed, but it sends no host metrics.
+metrics:
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: []
