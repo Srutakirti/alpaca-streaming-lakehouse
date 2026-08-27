@@ -148,6 +148,26 @@ free -b | awk '/^Mem:/ {printf "total=%.1f MiB used=%.1f MiB available=%.1f MiB\
 The VM uses Google Cloud Ops Agent to send selected systemd journal events to
 Cloud Logging. The source template is
 [`gce-hadoop-catalog-logging.yaml`](../../deployment/ops-agent/gce-hadoop-catalog-logging.yaml).
+
+The configuration creates two Cloud Logging streams from the system journal:
+
+- `gce_hadoop_catalog_journal` contains the Tansu and loader entries plus
+  systemd/timer lifecycle messages. Rust extractor application entries are
+  excluded to avoid duplicates.
+- `gce_hadoop_catalog_extractor_json` contains only entries emitted by
+  `alpaca-extractor.service` or `fakepaca-extractor.service`. The agent parses
+  each extractor `MESSAGE` JSON object, so its top-level `timestamp`, `level`,
+  `target`, and `fields` values are queryable as `jsonPayload` fields.
+
+For example, show final metrics from the direct extractor:
+
+```text
+log_id("gce_hadoop_catalog_extractor_json")
+jsonPayload.fields.message="final metrics"
+```
+
+`jsonPayload.fields.snapshot` remains a JSON string because the extractor
+currently encodes that value as a string inside its outer JSON event.
 It avoids duplicate `/var/log/syslog` ingestion, drops unrelated host journal
 traffic and Kafka telemetry-registration noise, and disables host metrics
 collection to limit e2-micro overhead. The receiver retains pipeline units and
