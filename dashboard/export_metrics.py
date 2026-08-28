@@ -96,7 +96,11 @@ def read_gcloud_logs(project_id: str, start: datetime) -> list[dict[str, Any]]:
                 log_filter,
                 f"--project={project_id}",
                 "--limit=500",
-                "--order=asc",
+                # Cloud Logging applies --limit before returning entries. Read
+                # newest-first so a busy current session cannot be displaced by
+                # older entries in the lookback window; build_snapshot sorts for
+                # chronological presentation afterwards.
+                "--order=desc",
                 "--format=json",
             ],
             check=True,
@@ -213,21 +217,24 @@ def _extractor_summary(events: list[dict[str, Any]]) -> dict[str, Any]:
     metrics = [event for event in events if event["message"] in {"metrics", "final metrics"}]
     latest = metrics[-1] if metrics else None
     final = next((event for event in reversed(events) if event["message"] == "final metrics"), None)
+    # A final-metrics event only describes the active/latest session when it is
+    # itself the newest metrics event. Otherwise it belongs to a prior session.
+    current_final = final if final is latest else None
     shutdown = next(
         (event for event in reversed(events) if event["message"] == "no bar data within idle window; shutting down producer"),
         None,
     )
     snapshot = latest["snapshot"] if latest else {}
     return {
-        "status": "clean_shutdown" if final else ("observed" if latest else "no_recent_session"),
+        "status": "clean_shutdown" if current_final else ("observed" if latest else "no_recent_session"),
         "last_event_utc": utc_text(events[-1]["at"]) if events else None,
         "last_bar_utc": snapshot.get("last_message_ts"),
         "messages_received": _integer(snapshot.get("messages_received")),
         "messages_sent": _integer(snapshot.get("messages_sent")),
         "delivery_failures": _integer(snapshot.get("delivery_failures")),
         "errors": _integer(snapshot.get("errors")),
-        "final_metrics_at_utc": utc_text(final["at"]) if final else None,
-        "shutdown_reason": "idle_window" if shutdown else None,
+        "final_metrics_at_utc": utc_text(current_final["at"]) if current_final else None,
+        "shutdown_reason": "idle_window" if current_final and shutdown else None,
     }
 
 

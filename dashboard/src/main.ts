@@ -84,16 +84,23 @@ function render(metricsData: Metrics): void {
   byId("last-bar").textContent = utc(extractor.last_bar_utc);
   byId("extractor-state").textContent = title(extractor.status);
   byId("last-commit").textContent = utc(loader.last_commit_utc);
+  const uniformBatches = loader.recent_commits.length > 0
+    && loader.recent_commits.every((commit) => commit.inserted === loader.last_inserted);
   byId("commit-detail").textContent = loader.last_inserted === null
-    ? "No recent commit" : `${metric(loader.last_received)} received · ${metric(loader.last_inserted)} inserted`;
+    ? "No recent commit"
+    : `${metric(loader.last_received)} received · ${metric(loader.last_inserted)} inserted${uniformBatches ? " · uniform bounded batches" : ""}`;
   byId("received").textContent = metric(extractor.messages_received);
   byId("sent").textContent = metric(extractor.messages_sent);
   byId("delivery-failures").textContent = metric(extractor.delivery_failures);
   byId("extractor-errors").textContent = metric(extractor.errors);
   byId("shutdown-detail").textContent = extractor.shutdown_reason
-    ? `Clean shutdown after ${title(extractor.shutdown_reason)}.` : "Session is active or final metrics are pending.";
+    ? `Clean shutdown after ${title(extractor.shutdown_reason)}.`
+    : extractor.status === "observed" ? "Live session observed; final metrics are pending."
+    : "No current session observed.";
   byId("final-metrics").textContent = extractor.final_metrics_at_utc
-    ? `Final metrics recorded ${utc(extractor.final_metrics_at_utc)}.` : "Final extractor metrics are not yet available.";
+    ? `Final metrics recorded ${utc(extractor.final_metrics_at_utc)}.`
+    : extractor.status === "observed" ? "Live session; final metrics will appear after the idle shutdown window."
+    : "Final extractor metrics are not yet available.";
   byId("summary").textContent = health.reasons.length === 0
     ? `${title(market.state)} · no current dashboard concerns.`
     : `${title(market.state)} · ${health.reasons.map(title).join(", ")}.`;
