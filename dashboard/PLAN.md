@@ -72,14 +72,14 @@ disabled on the e2-micro.
 
 ## Checkpoints
 
-### D0: Dashboard design record
+### D0: Dashboard design record — complete (`4fafe0c`)
 
 - Create this plan and the `dashboard/` directory.
 - Record architecture, public-data boundary, time states, schedule, metrics, and
   validation approach.
 - Commit the plan.
 
-### D1: WIF infrastructure as code
+### D1: WIF infrastructure as code — complete; cloud apply deferred to D5
 
 - Add Terraform for a dedicated `github-pages-metrics-reader` service account,
   WIF pool/provider, repository/branch/workflow claim restrictions, and only

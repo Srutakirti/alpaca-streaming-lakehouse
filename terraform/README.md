@@ -24,6 +24,21 @@ terraform -chdir=terraform plan \
 
 The resulting `warehouse_uri` is written to `/etc/gce-hadoop-catalog/runtime.env` by the VM startup script. Native release installation, Ops Agent configuration, and service enablement are deliberately separate acceptance-test actions.
 
+## Public dashboard identity
+
+This Terraform root also creates the read-only identity for the public GitHub
+Pages dashboard. It creates a dedicated service account with only
+`roles/logging.viewer`, a GitHub Actions Workload Identity Pool/provider, and
+an impersonation binding. The provider accepts only OIDC tokens from:
+
+- `Srutakirti/alpaca-streaming-lakehouse`;
+- the `architecture/gce-hadoop-catalog` default branch; and
+- `.github/workflows/dashboard-metrics.yml` on that branch.
+
+No service-account key is created. The workflow exchanges its GitHub OIDC token
+for short-lived, read-only GCP credentials. The variables can be overridden if
+the repository, default branch, or workflow filename changes.
+
 For an existing deployment, use its original `resource_prefix` exactly. A
 different prefix describes a different VM, network, service account, and
 buckets; Terraform will plan replacement resources rather than update the

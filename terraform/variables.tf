@@ -36,3 +36,36 @@ variable "machine_type" {
   type        = string
   default     = "e2-micro"
 }
+
+variable "github_dashboard_repository" {
+  description = "GitHub owner/repository trusted to generate public dashboard data."
+  type        = string
+  default     = "Srutakirti/alpaca-streaming-lakehouse"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_dashboard_repository))
+    error_message = "github_dashboard_repository must be in OWNER/REPOSITORY form."
+  }
+}
+
+variable "github_dashboard_branch" {
+  description = "Protected default branch that contains the scheduled dashboard workflow."
+  type        = string
+  default     = "architecture/gce-hadoop-catalog"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9._/-]+$", var.github_dashboard_branch))
+    error_message = "github_dashboard_branch contains unsupported characters."
+  }
+}
+
+variable "github_dashboard_workflow_file" {
+  description = "Workflow file trusted to read GCP logging for dashboard metrics."
+  type        = string
+  default     = "dashboard-metrics.yml"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9._-]+\\.ya?ml$", var.github_dashboard_workflow_file))
+    error_message = "github_dashboard_workflow_file must be a YAML filename."
+  }
+}

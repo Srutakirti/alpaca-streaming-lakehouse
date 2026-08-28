@@ -17,3 +17,11 @@ output "release_bucket" {
 output "vm_service_account" {
   value = google_service_account.vm.email
 }
+
+output "dashboard_metrics_service_account" {
+  value = google_service_account.dashboard_metrics_reader.email
+}
+
+output "dashboard_workload_identity_provider" {
+  value = google_iam_workload_identity_pool_provider.github_actions.name
+}
