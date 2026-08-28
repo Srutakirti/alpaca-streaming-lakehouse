@@ -9,3 +9,5 @@ websocket-extractor-rust/target/
 dist/
 terraform/.terraform/
 terraform/*.tfstate*
+dashboard/node_modules/
+dashboard/dist/

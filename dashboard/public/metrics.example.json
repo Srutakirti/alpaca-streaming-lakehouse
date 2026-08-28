@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-08-27T21:20:00Z",
+  "market": { "state": "closed", "next_expected_open_utc": "2026-08-28T13:30:00Z" },
+  "health": { "status": "healthy", "reasons": [] },
+  "extractor": {
+    "status": "clean_shutdown", "last_event_utc": "2026-08-27T21:10:24Z", "last_bar_utc": "2026-08-27T21:00:00Z",
+    "messages_received": 4167, "messages_sent": 4167, "delivery_failures": 0, "errors": 0,
+    "final_metrics_at_utc": "2026-08-27T21:10:24Z", "shutdown_reason": "idle_window"
+  },
+  "loader": {
+    "last_commit_utc": "2026-08-27T21:00:57Z", "last_received": 1000, "last_inserted": 1000,
+    "recent_commits": [{ "at_utc": "2026-08-27T21:00:57Z", "received": 1000, "inserted": 1000 }]
+  },
+  "alerts": [],
+  "links": { "extractor_logs": "https://console.cloud.google.com/", "loader_logs": "https://console.cloud.google.com/" }
+}

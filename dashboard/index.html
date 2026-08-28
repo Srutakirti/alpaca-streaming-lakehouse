@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Public operational health dashboard for the GCE HadoopCatalog pipeline." />
+    <title>Pipeline operations</title>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">GCE HADOOPCATALOG · OPERATIONS</p>
+          <h1>Pipeline pulse</h1>
+          <p id="summary" class="summary">Loading the latest public metrics…</p>
+        </div>
+        <div class="header-meta">
+          <span id="health-badge" class="badge neutral">Loading</span>
+          <time id="generated-at">—</time>
+        </div>
+      </header>
+
+      <section id="notice" class="notice" hidden></section>
+
+      <section class="grid status-grid" aria-label="Pipeline health">
+        <article class="card state-card">
+          <p class="label">Market state</p>
+          <p id="market-state" class="metric">—</p>
+          <p class="detail">Next expected open <time id="next-open">—</time></p>
+        </article>
+        <article class="card">
+          <p class="label">Last bar</p>
+          <p id="last-bar" class="metric compact">—</p>
+          <p id="extractor-state" class="detail">Extractor state unavailable</p>
+        </article>
+        <article class="card">
+          <p class="label">Last loader commit</p>
+          <p id="last-commit" class="metric compact">—</p>
+          <p id="commit-detail" class="detail">No recent commit</p>
+        </article>
+      </section>
+
+      <section class="grid operational-grid" aria-label="Operational metrics">
+        <article class="card wide">
+          <div class="card-heading">
+            <div>
+              <p class="label">Extractor session</p>
+              <h2>Delivery and connection</h2>
+            </div>
+            <a id="extractor-link" class="log-link" href="#">Inspect logs ↗</a>
+          </div>
+          <dl class="metric-list">
+            <div><dt>Received</dt><dd id="received">—</dd></div>
+            <div><dt>Delivered</dt><dd id="sent">—</dd></div>
+            <div><dt>Failures</dt><dd id="delivery-failures">—</dd></div>
+            <div><dt>Errors</dt><dd id="extractor-errors">—</dd></div>
+          </dl>
+          <p id="shutdown-detail" class="detail"></p>
+        </article>
+
+        <article class="card wide">
+          <div class="card-heading">
+            <div>
+              <p class="label">Loader commits</p>
+              <h2>Recent append volume</h2>
+            </div>
+            <a id="loader-link" class="log-link" href="#">Inspect logs ↗</a>
+          </div>
+          <div id="commit-chart" class="chart" aria-label="Recent inserted records by commit"></div>
+          <p id="chart-empty" class="detail">No recent commits in the dashboard window.</p>
+        </article>
+      </section>
+
+      <section class="grid lower-grid">
+        <article class="card">
+          <p class="label">Attention</p>
+          <h2>Warnings and errors</h2>
+          <ul id="alerts" class="alerts"><li>No recent alerts.</li></ul>
+        </article>
+        <article class="card">
+          <p class="label">Session close</p>
+          <h2>Expected shutdown</h2>
+          <p id="final-metrics" class="detail">Final extractor metrics unavailable.</p>
+        </article>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

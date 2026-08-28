@@ -98,7 +98,7 @@ disabled on the e2-micro.
 - Unit-test normal market, settling, closed, weekend, stale, and error cases.
 - Commit the checkpoint.
 
-### D3: Static public dashboard
+### D3: Static public dashboard — complete
 
 - Add the Vite + vanilla TypeScript dashboard, custom responsive UI, UTC labels,
   state-aware health presentation, charts, tables, and Logs Explorer links.
