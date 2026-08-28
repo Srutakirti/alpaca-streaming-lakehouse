@@ -11,3 +11,5 @@ terraform/.terraform/
 terraform/*.tfstate*
 dashboard/node_modules/
 dashboard/dist/
+dashboard/public/metrics.json
+gha-creds-*.json

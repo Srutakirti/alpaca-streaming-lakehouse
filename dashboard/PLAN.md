@@ -105,7 +105,7 @@ disabled on the e2-micro.
 - Test a production build and fixture-driven rendering without cloud access.
 - Commit the checkpoint.
 
-### D4: Scheduled GitHub Actions and Pages deployment
+### D4: Scheduled GitHub Actions and Pages deployment — complete; cloud acceptance deferred to D5
 
 - Add manual-dispatch and timezone-covering scheduled workflow triggers.
 - Authenticate with GitHub OIDC and WIF; generate metrics; build the site; deploy

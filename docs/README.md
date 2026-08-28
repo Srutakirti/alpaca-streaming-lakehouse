@@ -12,6 +12,7 @@ runbooks and the related documentation elsewhere in the repository.
 | Operate the deployed VM | [VM pipeline services](runbooks/vm-services.md) | systemd units, configuration, scheduling, memory, Cloud Logging, release safety, and deferred logging work. |
 | Build or install a VM release | [Native VM release](../deployment/native/README.md) | Docker-free bundle contents, build, installation, runtime limits, and direct-Alpaca timer. |
 | Plan or change cloud foundation resources | [Terraform infrastructure](../terraform/README.md) | Isolated VM, GCS, IAM foundation, and safe Terraform planning. |
+| Configure or operate the public dashboard | [Public operations dashboard](runbooks/public-dashboard.md) | GitHub Pages data path, WIF variables, schedule, local validation, and troubleshooting. |
 | Explore an Iceberg catalog interactively | [Notebook guide](../notebooks/README.md) | Read-only PySpark local and opt-in GCS exploration. |
 | Change the Rust WebSocket extractor | [Extractor README](../websocket-extractor-rust/README.md) | Architecture, configuration, build/run, retry, shutdown, logging, and backpressure. |
 | Review extractor implementation history | [Extractor implementation plan](../websocket-extractor-rust/PLAN.md) | Completed historical implementation milestones; use the extractor README and VM runbook for current operation. |

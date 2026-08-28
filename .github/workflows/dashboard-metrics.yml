@@ -1,0 +1,80 @@
+name: Dashboard metrics
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Covers both EST and EDT market hours; the exporter determines NY state.
+    - cron: "*/15 13-22 * * 1-5"
+    # Keep off-hours state current without spending runner minutes every 15 minutes.
+    - cron: "0 0-12,23 * * 1-5"
+    - cron: "0 12 * * 0,6"
+
+concurrency:
+  group: public-dashboard
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      DASHBOARD_GCP_PROJECT: ${{ vars.GCP_DASHBOARD_PROJECT_ID }}
+      DASHBOARD_WIF_PROVIDER: ${{ vars.GCP_DASHBOARD_WORKLOAD_IDENTITY_PROVIDER }}
+      DASHBOARD_METRICS_SERVICE_ACCOUNT: ${{ vars.GCP_DASHBOARD_METRICS_SERVICE_ACCOUNT }}
+    steps:
+      - name: Check out the default-branch source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
+      - name: Authenticate to Google Cloud through Workload Identity Federation
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.DASHBOARD_GCP_PROJECT }}
+          workload_identity_provider: ${{ env.DASHBOARD_WIF_PROVIDER }}
+          service_account: ${{ env.DASHBOARD_METRICS_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Generate sanitized public metrics
+        run: >-
+          uv run --no-project python dashboard/export_metrics.py
+          --project "$DASHBOARD_GCP_PROJECT"
+          --output dashboard/public/metrics.json
+
+      - name: Set up GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build the dashboard
+        working-directory: dashboard
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dashboard/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
