@@ -168,6 +168,48 @@ jsonPayload.fields.message="final metrics"
 
 `jsonPayload.fields.snapshot` remains a JSON string because the extractor
 currently encodes that value as a string inside its outer JSON event.
+
+### Deferred: reduce Java loader library noise
+
+The loader's concise application commit line is the normal operational signal:
+
+```text
+committed_at=<UTC timestamp> received=<count> inserted=<count>
+```
+
+The following Hadoop and Iceberg `INFO` records are routine implementation
+details and can be suppressed in a later, separately validated runtime update:
+
+- `org.apache.hadoop.io.compress.CodecPool - Got brand-new compressor [.gz]`
+- `org.apache.iceberg.hadoop.HadoopTableOperations - Committed a new metadata file ...`
+- `org.apache.iceberg.SnapshotProducer - Committed snapshot ...`
+
+Add these *targeted* logger levels to the quoted `LOADER_JAVA_OPTS` value in
+`/etc/gce-hadoop-catalog/runtime.env` and to the release's runtime environment
+example:
+
+```bash
+-Dorg.slf4j.simpleLogger.log.org.apache.hadoop.io.compress.CodecPool=warn \
+-Dorg.slf4j.simpleLogger.log.org.apache.iceberg.hadoop.HadoopTableOperations=warn \
+-Dorg.slf4j.simpleLogger.log.org.apache.iceberg.SnapshotProducer=warn
+```
+
+Use `warn`, rather than `off`, so warnings and errors from these components
+remain visible. This is preferable to an Ops Agent exclusion because Java then
+does not write the unwanted records to journald or send them to Cloud Logging.
+
+`org.apache.iceberg.metrics.LoggingMetricsReporter` emits a detailed
+`CommitReport` for each append. Keep it initially because it includes snapshot
+and timing diagnostics. If the concise application commit line proves
+sufficient, it can later be suppressed independently with:
+
+```bash
+-Dorg.slf4j.simpleLogger.log.org.apache.iceberg.metrics.LoggingMetricsReporter=warn
+```
+
+When implementing this deferred change, restart only the loader and validate
+that a new append still emits the concise commit line, the listed `INFO`
+messages no longer appear, and warning/error records remain available.
 It avoids duplicate `/var/log/syslog` ingestion, drops unrelated host journal
 traffic and Kafka telemetry-registration noise, and disables host metrics
 collection to limit e2-micro overhead. The receiver retains pipeline units and
