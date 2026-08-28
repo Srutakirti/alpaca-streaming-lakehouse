@@ -114,7 +114,7 @@ disabled on the e2-micro.
   pull-request code.
 - Validate workflow syntax and commit the checkpoint.
 
-### D5: Cloud and public acceptance
+### D5: Cloud and public acceptance — complete
 
 - Apply the reviewed Terraform WIF resources.
 - Manually dispatch the workflow, verify it can read only the intended GCP data,
@@ -122,6 +122,25 @@ disabled on the e2-micro.
 - Verify public output contains no prohibited fields, then validate market-open,
   market-close, and off-hours views.
 - Commit evidence and report the final acceptance result.
+
+Acceptance evidence, 2026-08-28:
+
+- Terraform created the dedicated `gh-pages-metrics-reader` service account,
+  its sole `roles/logging.viewer` grant, and the repository/branch/workflow
+  restricted WIF pool, provider, and impersonation binding.
+- Manual workflow run
+  [`33192505473`](https://github.com/Srutakirti/alpaca-streaming-lakehouse/actions/runs/33192505473)
+  succeeded: GitHub OIDC/WIF authentication, fixed Logging reads, metric
+  generation, static build, artifact upload, and Pages deployment all passed.
+- The public site is
+  [srutakirti.github.io/alpaca-streaming-lakehouse](https://srutakirti.github.io/alpaca-streaming-lakehouse/).
+  Its live `metrics.json` passed the schema and public-boundary check: no raw
+  log fields, VM or GCS paths, project/service-account identifiers, symbols,
+  credentials, or Cloud Logs links are published.
+- The live snapshot accurately reported `market_open` and `unhealthy` for the
+  current stale extractor/loader data. This is an operational state, not a
+  dashboard deployment failure; clean-shutdown and bounded commit-history
+  values remain visible.
 
 ## Open operational dependency
 
