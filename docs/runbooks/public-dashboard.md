@@ -2,9 +2,9 @@
 
 The public dashboard is a static GitHub Pages site. It displays a deliberately
 small, safe summary of the GCE HadoopCatalog pipeline: state, UTC timestamps,
-counts, recent loader commits, coded alerts, and links to Cloud Logs Explorer.
-It never includes raw logs, credentials, hostnames, command lines, GCS paths,
-service-account identifiers, or market records.
+counts, recent loader commits, and coded alerts. It never includes raw logs,
+credentials, hostnames, command lines, GCS paths, project IDs, service-account
+identifiers, Cloud Logs links, or market records.
 
 ## Data path and permissions
 

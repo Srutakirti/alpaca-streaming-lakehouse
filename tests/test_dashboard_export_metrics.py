@@ -24,6 +24,7 @@ def test_market_close_fixture_is_sanitized_and_reports_clean_shutdown() -> None:
     assert snapshot["loader"]["last_inserted"] == 1000
     assert "MESSAGE" not in json.dumps(snapshot)
     assert "_SYSTEMD_UNIT" not in json.dumps(snapshot)
+    assert "example-project" not in json.dumps(snapshot)
 
 
 def test_market_open_marks_stale_bar_and_commit_unhealthy() -> None:

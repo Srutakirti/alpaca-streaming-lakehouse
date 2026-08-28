@@ -158,10 +158,6 @@ def build_snapshot(
         "extractor": extractor,
         "loader": loader,
         "alerts": alerts[:20],
-        "links": {
-            "extractor_logs": _logs_link(settings.project_id, EXTRACTOR_LOG),
-            "loader_logs": _logs_link(settings.project_id, JOURNAL_LOG),
-        },
     }
 
 
@@ -295,10 +291,6 @@ def _apply_freshness(
 
 def _integer(value: Any) -> int | None:
     return value if isinstance(value, int) else None
-
-
-def _logs_link(project_id: str, log_name: str) -> str:
-    return f"https://console.cloud.google.com/logs/query;query=log_id(%22{log_name}%22)?project={project_id}"
 
 
 def main() -> None:

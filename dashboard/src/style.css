@@ -14,7 +14,7 @@ h2 { margin: .2rem 0 0; font-size: 1.15rem; }
 .notice { margin: 1.5rem 0; padding: .85rem 1rem; background: #12273b; color: #a9c9e8; border-left: 3px solid #55a9e3; border-radius: .35rem; }
 .grid { display: grid; gap: 1rem; margin-top: 1rem; }.status-grid { grid-template-columns: repeat(3, 1fr); }.operational-grid { grid-template-columns: repeat(2, 1fr); }.lower-grid { grid-template-columns: 1.4fr 1fr; }
 .card { min-width: 0; padding: 1.35rem; background: rgba(17, 31, 50, .88); border: 1px solid #24415c; border-radius: .8rem; box-shadow: 0 1rem 3rem rgba(0, 0, 0, .16); }
-.metric { margin: .45rem 0; font-size: 1.95rem; font-weight: 750; letter-spacing: -.04em; }.metric.compact { font-size: 1.15rem; line-height: 1.45; }.detail { margin: .3rem 0 0; font-size: .9rem; }.log-link { color: #8dceff; font-size: .82rem; white-space: nowrap; }
+.metric { margin: .45rem 0; font-size: 1.95rem; font-weight: 750; letter-spacing: -.04em; }.metric.compact { font-size: 1.15rem; line-height: 1.45; }.detail { margin: .3rem 0 0; font-size: .9rem; }
 .metric-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin: 1.3rem 0 0; }.metric-list div { padding: .7rem; background: #0b192a; border-radius: .5rem; }.metric-list dt { color: #8aa4c0; font-size: .76rem; }.metric-list dd { margin: .2rem 0 0; font-size: 1.25rem; font-weight: 700; }
 .chart { display: flex; align-items: end; gap: .28rem; height: 9rem; padding-top: 1rem; }.chart div { flex: 1; height: 100%; display: flex; align-items: end; }.chart span { width: 100%; min-height: 3px; background: linear-gradient(#7bdcff, #3189ca); border-radius: .2rem .2rem 0 0; }
 .alerts { margin: 1rem 0 0; padding-left: 1.2rem; color: #c5d2e0; }.alerts li + li { margin-top: .55rem; }

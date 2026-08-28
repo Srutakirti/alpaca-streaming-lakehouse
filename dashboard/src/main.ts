@@ -14,7 +14,6 @@ type Metrics = {
   };
   loader: { last_commit_utc: string | null; last_received: number | null; last_inserted: number | null; recent_commits: Commit[] };
   alerts: Alert[];
-  links: { extractor_logs: string; loader_logs: string };
 };
 
 const timeFormat = new Intl.DateTimeFormat("en-GB", {
@@ -91,8 +90,6 @@ function render(metricsData: Metrics): void {
   byId("sent").textContent = metric(extractor.messages_sent);
   byId("delivery-failures").textContent = metric(extractor.delivery_failures);
   byId("extractor-errors").textContent = metric(extractor.errors);
-  byId<HTMLAnchorElement>("extractor-link").href = metricsData.links.extractor_logs;
-  byId<HTMLAnchorElement>("loader-link").href = metricsData.links.loader_logs;
   byId("shutdown-detail").textContent = extractor.shutdown_reason
     ? `Clean shutdown after ${title(extractor.shutdown_reason)}.` : "Session is active or final metrics are pending.";
   byId("final-metrics").textContent = extractor.final_metrics_at_utc

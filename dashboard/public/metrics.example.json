@@ -12,6 +12,5 @@
     "last_commit_utc": "2026-08-27T21:00:57Z", "last_received": 1000, "last_inserted": 1000,
     "recent_commits": [{ "at_utc": "2026-08-27T21:00:57Z", "received": 1000, "inserted": 1000 }]
   },
-  "alerts": [],
-  "links": { "extractor_logs": "https://console.cloud.google.com/", "loader_logs": "https://console.cloud.google.com/" }
+  "alerts": []
 }

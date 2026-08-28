@@ -63,7 +63,7 @@ for a missing clean extractor shutdown.
   errors, final session metrics, and clean-shutdown reason.
 - Loader last commit, commit age, received/inserted counts, and bounded recent
   commit history.
-- Bounded warning/error summaries and prebuilt Cloud Logs Explorer links.
+- Bounded warning/error summaries with coded (not raw) failure causes.
 
 The generated JSON must exclude raw log messages, command lines, credentials,
 VM hostnames, GCS paths, service-account identifiers, and raw symbol data.
@@ -101,7 +101,7 @@ disabled on the e2-micro.
 ### D3: Static public dashboard — complete
 
 - Add the Vite + vanilla TypeScript dashboard, custom responsive UI, UTC labels,
-  state-aware health presentation, charts, tables, and Logs Explorer links.
+  state-aware health presentation, charts, tables, and coded alert summaries.
 - Test a production build and fixture-driven rendering without cloud access.
 - Commit the checkpoint.
 
