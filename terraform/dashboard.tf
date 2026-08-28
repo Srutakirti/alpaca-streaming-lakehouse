@@ -23,7 +23,7 @@ resource "google_iam_workload_identity_pool" "github_actions" {
 resource "google_iam_workload_identity_pool_provider" "github_actions" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.github_actions.workload_identity_pool_id
   workload_identity_pool_provider_id = "dashboard"
-  display_name                       = "GitHub Actions dashboard workflow"
+  display_name                       = "GitHub dashboard workflow"
   description                        = "Trusts only the configured dashboard workflow and branch"
 
   attribute_mapping = {
