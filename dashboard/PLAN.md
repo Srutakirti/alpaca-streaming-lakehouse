@@ -89,7 +89,7 @@ disabled on the e2-micro.
 - Validate Terraform formatting and plan. Apply only with configured GCP access.
 - Commit the checkpoint.
 
-### D2: Exporter and metric contract
+### D2: Exporter and metric contract — complete
 
 - Add a versioned `metrics.json` contract, sanitized Cloud Logging fixtures, and
   a `uv`-run Python exporter.

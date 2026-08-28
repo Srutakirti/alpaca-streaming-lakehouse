@@ -1,0 +1,42 @@
+[
+  {
+    "timestamp": "2026-08-27T20:59:23Z",
+    "jsonPayload": {
+      "_SYSTEMD_UNIT": "alpaca-extractor.service",
+      "level": "INFO",
+      "fields": {
+        "message": "metrics",
+        "snapshot": "{\"connection_status\":true,\"delivery_failures\":0,\"errors\":0,\"last_message_ts\":\"2026-08-27T20:59:00Z\",\"messages_received\":4100,\"messages_sent\":4100}"
+      }
+    }
+  },
+  {
+    "timestamp": "2026-08-27T21:10:23Z",
+    "jsonPayload": {
+      "_SYSTEMD_UNIT": "alpaca-extractor.service",
+      "level": "WARN",
+      "fields": {
+        "message": "no bar data within idle window; shutting down producer",
+        "idle_secs": 600
+      }
+    }
+  },
+  {
+    "timestamp": "2026-08-27T21:10:24Z",
+    "jsonPayload": {
+      "_SYSTEMD_UNIT": "alpaca-extractor.service",
+      "level": "INFO",
+      "fields": {
+        "message": "final metrics",
+        "snapshot": "{\"connection_status\":false,\"delivery_failures\":0,\"errors\":0,\"last_message_ts\":\"2026-08-27T21:00:00Z\",\"messages_received\":4167,\"messages_sent\":4167}"
+      }
+    }
+  },
+  {
+    "timestamp": "2026-08-27T21:00:57Z",
+    "jsonPayload": {
+      "_SYSTEMD_UNIT": "iceberg-loader.service",
+      "MESSAGE": "committed_at=2026-08-27T21:00:57Z received=1000 inserted=1000"
+    }
+  }
+]
