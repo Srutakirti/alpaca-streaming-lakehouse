@@ -9,10 +9,12 @@ from dashboard.export_metrics import (
     fixed_log_filters,
     market_state,
     read_gcloud_logs,
+    summarize_table_metadata,
 )
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "dashboard" / "market_close.json"
+TABLE_FIXTURE = Path(__file__).parent / "fixtures" / "dashboard" / "table_metadata.json"
 
 
 def test_market_close_fixture_is_sanitized_and_reports_clean_shutdown() -> None:
@@ -32,6 +34,7 @@ def test_market_close_fixture_is_sanitized_and_reports_clean_shutdown() -> None:
     assert "MESSAGE" not in json.dumps(snapshot)
     assert "_SYSTEMD_UNIT" not in json.dumps(snapshot)
     assert "example-project" not in json.dumps(snapshot)
+    assert snapshot["table"]["status"] == "unavailable"
 
 
 def test_market_open_marks_stale_bar_and_commit_unhealthy() -> None:
@@ -107,3 +110,45 @@ def test_new_active_metrics_do_not_reuse_a_prior_session_shutdown() -> None:
     assert snapshot["extractor"]["final_metrics_at_utc"] is None
     assert snapshot["extractor"]["shutdown_reason"] is None
     assert snapshot["extractor"]["last_bar_utc"] == "2026-08-28T16:59:00Z"
+
+
+def test_table_metadata_summary_exposes_only_safe_aggregate_metrics() -> None:
+    table = summarize_table_metadata(json.loads(TABLE_FIXTURE.read_text()))
+
+    assert table == {
+        "status": "available",
+        "reason": None,
+        "last_metadata_update_utc": "2026-08-31T21:00:47Z",
+        "current_snapshot_commit_utc": "2026-08-31T21:00:47Z",
+        "latest_operation": "append",
+        "latest_added_records": 19,
+        "latest_added_data_files": 1,
+        "latest_added_files_size_bytes": 3701,
+        "total_records": 4623785,
+        "total_data_files": 4530,
+        "total_files_size_bytes": 899223658,
+        "average_rows_per_data_file": 1020.7,
+        "average_data_file_size_bytes": 198504.12,
+        "total_delete_files": 0,
+        "total_position_deletes": 0,
+        "total_equality_deletes": 0,
+        "snapshot_history_count": 1,
+        "metadata_history_count": 2,
+    }
+    rendered = json.dumps(table)
+    assert "private-table-uuid" not in rendered
+    assert "private-bucket" not in rendered
+    assert "manifest-list" not in rendered
+
+
+def test_invalid_table_metadata_is_safe_and_does_not_break_pipeline_health() -> None:
+    snapshot = build_snapshot(
+        [],
+        DashboardSettings(project_id="example-project"),
+        datetime(2026, 8, 27, 15, 0, tzinfo=UTC),
+        {"current-snapshot-id": 1, "snapshots": []},
+    )
+
+    assert snapshot["table"]["status"] == "unavailable"
+    assert snapshot["table"]["reason"] == "missing_current_snapshot"
+    assert snapshot["health"]["status"] == "unhealthy"

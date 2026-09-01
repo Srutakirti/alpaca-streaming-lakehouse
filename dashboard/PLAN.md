@@ -148,3 +148,35 @@ GitHub schedules execute from the repository's default branch. The dashboard
 can be built and manually dispatched from this feature branch, but scheduled
 operation requires the approved workflow to be present on the default branch
 and that branch to be trusted by the WIF provider.
+
+## Iceberg table-metadata extension
+
+The dashboard will add a separate, public-safe table-metrics section sourced
+from the current Iceberg metadata JSON. Logging remains the source of pipeline
+health. Metadata freshness is informational initially, so a read failure does
+not make a healthy producer/loader dashboard red.
+
+### M1: Contract and parser
+
+- Parse a supplied Iceberg metadata JSON into safe aggregate fields only.
+- Validate current-snapshot selection, snapshot summary conversion, malformed
+  metadata behavior, and no GCS-path/UUID/schema leakage.
+- Commit the checkpoint.
+
+### M2: Static table-metrics presentation
+
+- Display current table totals, latest snapshot delta, and small-file
+  maintenance indicators separately from loader batches.
+- Commit after the production frontend build passes.
+
+### M3: Conditional GCS read identity
+
+- Add a bucket IAM condition limited to the configured table `metadata/`
+  prefix; add configuration and read the current version via `version-hint.text`.
+- Review the Terraform plan before applying the new permission.
+
+### M4: Live acceptance
+
+- Dispatch the workflow and compare safe published metrics against the current
+  metadata JSON. Verify no metadata location, version, UUID, schema, or raw
+  content is public.

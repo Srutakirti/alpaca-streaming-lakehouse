@@ -1,0 +1,31 @@
+{
+  "format-version": 2,
+  "table-uuid": "private-table-uuid",
+  "location": "gs://private-bucket/warehouse/alpaca_candidate/bars_direct",
+  "last-updated-ms": 1788210047603,
+  "current-snapshot-id": 1481810039430248700,
+  "snapshots": [
+    {
+      "snapshot-id": 1481810039430248700,
+      "timestamp-ms": 1788210047603,
+      "manifest-list": "gs://private-bucket/manifest-list.avro",
+      "summary": {
+        "operation": "append",
+        "added-data-files": "1",
+        "added-records": "19",
+        "added-files-size": "3701",
+        "total-records": "4623785",
+        "total-files-size": "899223658",
+        "total-data-files": "4530",
+        "total-delete-files": "0",
+        "total-position-deletes": "0",
+        "total-equality-deletes": "0"
+      }
+    }
+  ],
+  "metadata-log": [
+    {"metadata-file": "gs://private-bucket/metadata/v4530.metadata.json"},
+    {"metadata-file": "gs://private-bucket/metadata/v4529.metadata.json"}
+  ],
+  "properties": {"write.parquet.compression-codec": "zstd"}
+}

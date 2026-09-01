@@ -20,6 +20,7 @@ NEW_YORK = ZoneInfo("America/New_York")
 COMMIT_PATTERN = re.compile(
     r"committed_at=(?P<committed_at>\S+) received=(?P<received>\d+) inserted=(?P<inserted>\d+)"
 )
+SAFE_ICEBERG_OPERATIONS = {"append", "overwrite", "replace", "delete"}
 
 
 @dataclass(frozen=True)
@@ -112,7 +113,10 @@ def read_gcloud_logs(project_id: str, start: datetime) -> list[dict[str, Any]]:
 
 
 def build_snapshot(
-    entries: Iterable[dict[str, Any]], settings: DashboardSettings, now: datetime
+    entries: Iterable[dict[str, Any]],
+    settings: DashboardSettings,
+    now: datetime,
+    table_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a public-safe metric document without forwarding raw log fields."""
     now = now.astimezone(UTC)
@@ -153,6 +157,7 @@ def build_snapshot(
 
     extractor = _extractor_summary(extractor_events)
     loader = _loader_summary(commits, settings.history_limit)
+    table = summarize_table_metadata(table_metadata)
     health = _health(state, now, extractor, loader, alerts, settings)
     return {
         "schema_version": 1,
@@ -161,6 +166,7 @@ def build_snapshot(
         "health": health,
         "extractor": extractor,
         "loader": loader,
+        "table": table,
         "alerts": alerts[:20],
     }
 
@@ -248,6 +254,105 @@ def _loader_summary(commits: list[dict[str, Any]], limit: int) -> dict[str, Any]
     }
 
 
+def summarize_table_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    """Return public-safe current-table metrics from one Iceberg metadata JSON."""
+    result = _unavailable_table("not_configured")
+    if not isinstance(metadata, dict):
+        return result
+
+    snapshots = metadata.get("snapshots")
+    current_snapshot_id = metadata.get("current-snapshot-id")
+    if not isinstance(snapshots, list) or current_snapshot_id is None:
+        return _unavailable_table("invalid_metadata")
+    current = next(
+        (
+            snapshot
+            for snapshot in snapshots
+            if isinstance(snapshot, dict) and snapshot.get("snapshot-id") == current_snapshot_id
+        ),
+        None,
+    )
+    if current is None:
+        return _unavailable_table("missing_current_snapshot")
+
+    summary = current.get("summary")
+    if not isinstance(summary, dict):
+        return _unavailable_table("missing_snapshot_summary")
+
+    total_records = _metadata_integer(summary.get("total-records"))
+    total_data_files = _metadata_integer(summary.get("total-data-files"))
+    total_files_size_bytes = _metadata_integer(summary.get("total-files-size"))
+    operation = str(summary.get("operation", "other")).lower()
+    return {
+        "status": "available",
+        "reason": None,
+        "last_metadata_update_utc": _metadata_utc(metadata.get("last-updated-ms")),
+        "current_snapshot_commit_utc": _metadata_utc(current.get("timestamp-ms")),
+        "latest_operation": operation if operation in SAFE_ICEBERG_OPERATIONS else "other",
+        "latest_added_records": _metadata_integer(summary.get("added-records")),
+        "latest_added_data_files": _metadata_integer(summary.get("added-data-files")),
+        "latest_added_files_size_bytes": _metadata_integer(summary.get("added-files-size")),
+        "total_records": total_records,
+        "total_data_files": total_data_files,
+        "total_files_size_bytes": total_files_size_bytes,
+        "average_rows_per_data_file": _ratio(total_records, total_data_files),
+        "average_data_file_size_bytes": _ratio(total_files_size_bytes, total_data_files),
+        "total_delete_files": _metadata_integer(summary.get("total-delete-files")),
+        "total_position_deletes": _metadata_integer(summary.get("total-position-deletes")),
+        "total_equality_deletes": _metadata_integer(summary.get("total-equality-deletes")),
+        "snapshot_history_count": len(snapshots),
+        "metadata_history_count": _list_length(metadata.get("metadata-log")),
+    }
+
+
+def _unavailable_table(reason: str) -> dict[str, Any]:
+    return {
+        "status": "unavailable",
+        "reason": reason,
+        "last_metadata_update_utc": None,
+        "current_snapshot_commit_utc": None,
+        "latest_operation": None,
+        "latest_added_records": None,
+        "latest_added_data_files": None,
+        "latest_added_files_size_bytes": None,
+        "total_records": None,
+        "total_data_files": None,
+        "total_files_size_bytes": None,
+        "average_rows_per_data_file": None,
+        "average_data_file_size_bytes": None,
+        "total_delete_files": None,
+        "total_position_deletes": None,
+        "total_equality_deletes": None,
+        "snapshot_history_count": None,
+        "metadata_history_count": None,
+    }
+
+
+def _metadata_integer(value: Any) -> int | None:
+    if isinstance(value, int) and value >= 0:
+        return value
+    if isinstance(value, str) and value.isdecimal():
+        return int(value)
+    return None
+
+
+def _metadata_utc(value: Any) -> str | None:
+    milliseconds = _metadata_integer(value)
+    if milliseconds is None:
+        return None
+    return utc_text(datetime.fromtimestamp(milliseconds / 1_000, tz=UTC))
+
+
+def _ratio(numerator: int | None, denominator: int | None) -> float | None:
+    if numerator is None or denominator is None or denominator == 0:
+        return None
+    return round(numerator / denominator, 2)
+
+
+def _list_length(value: Any) -> int | None:
+    return len(value) if isinstance(value, list) else None
+
+
 def _health(
     state: str,
     now: datetime,
@@ -304,6 +409,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", default=None, help="GCP project for fixed live Cloud Logging queries")
     parser.add_argument("--input", type=Path, help="Saved Cloud Logging JSON entries for local testing")
+    parser.add_argument(
+        "--table-metadata-input",
+        type=Path,
+        help="Local Iceberg metadata JSON for contract testing; no cloud storage read",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--now", help="RFC3339 UTC timestamp for reproducible testing")
     parser.add_argument("--lookback-hours", type=int, default=36)
@@ -317,7 +427,10 @@ def main() -> None:
     else:
         project_id = args.project
         entries = read_gcloud_logs(project_id, now - timedelta(hours=args.lookback_hours))
-    snapshot = build_snapshot(entries, DashboardSettings(project_id=project_id), now)
+    table_metadata = (
+        json.loads(args.table_metadata_input.read_text()) if args.table_metadata_input else None
+    )
+    snapshot = build_snapshot(entries, DashboardSettings(project_id=project_id), now, table_metadata)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
 
