@@ -179,11 +179,20 @@ Status: complete (`8dea33d`).
   prefix; add configuration and read the current version via `version-hint.text`.
 - Review the Terraform plan before applying the new permission.
 
-Status: prepared for review. The plan is one conditional object-viewer binding
-for `warehouse/alpaca_candidate/bars_direct/metadata/`; cloud apply is pending.
+Status: complete (`8d416d5`). Terraform applied one conditional object-viewer
+binding for `warehouse/alpaca_candidate/bars_direct/metadata/`; the GitHub
+workflow receives the metadata URI as a repository variable.
 
 ### M4: Live acceptance
 
 - Dispatch the workflow and compare safe published metrics against the current
   metadata JSON. Verify no metadata location, version, UUID, schema, or raw
   content is public.
+
+Status: complete. Workflow run
+[`33510687907`](https://github.com/Srutakirti/alpaca-streaming-lakehouse/actions/runs/33510687907)
+succeeded on 2026-09-01. Its public metrics matched the current `v4531` table
+metadata for the latest `append`, 4,623,785 total records, 4,530 data files,
+899,223,658 total bytes, latest delta, and history counts. The published JSON
+passed a boundary check for GCS paths, metadata version, UUID, manifests,
+project ID, and VM identifier.
