@@ -163,6 +163,8 @@ not make a healthy producer/loader dashboard red.
   metadata behavior, and no GCS-path/UUID/schema leakage.
 - Commit the checkpoint.
 
+Status: complete (`c5a95f6`).
+
 ### M2: Static table-metrics presentation
 
 - Display current table totals, latest snapshot delta, and small-file

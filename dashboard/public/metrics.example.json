@@ -12,5 +12,14 @@
     "last_commit_utc": "2026-08-27T21:00:57Z", "last_received": 1000, "last_inserted": 1000,
     "recent_commits": [{ "at_utc": "2026-08-27T21:00:57Z", "received": 1000, "inserted": 1000 }]
   },
+  "table": {
+    "status": "available", "reason": null,
+    "last_metadata_update_utc": "2026-08-31T21:00:47Z", "current_snapshot_commit_utc": "2026-08-31T21:00:47Z",
+    "latest_operation": "append", "latest_added_records": 19, "latest_added_data_files": 1, "latest_added_files_size_bytes": 3701,
+    "total_records": 4623785, "total_data_files": 4530, "total_files_size_bytes": 899223658,
+    "average_rows_per_data_file": 1020.7, "average_data_file_size_bytes": 198504.12,
+    "total_delete_files": 0, "total_position_deletes": 0, "total_equality_deletes": 0,
+    "snapshot_history_count": 4530, "metadata_history_count": 100
+  },
   "alerts": []
 }

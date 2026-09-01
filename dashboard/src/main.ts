@@ -2,6 +2,17 @@ import "./style.css";
 
 type Alert = { at_utc: string; component: string; severity: string; code: string };
 type Commit = { at_utc: string; received: number; inserted: number };
+type Table = {
+  status: "available" | "unavailable"; reason: string | null;
+  last_metadata_update_utc: string | null; current_snapshot_commit_utc: string | null;
+  latest_operation: string | null; latest_added_records: number | null;
+  latest_added_data_files: number | null; latest_added_files_size_bytes: number | null;
+  total_records: number | null; total_data_files: number | null; total_files_size_bytes: number | null;
+  average_rows_per_data_file: number | null; average_data_file_size_bytes: number | null;
+  total_delete_files: number | null; total_position_deletes: number | null;
+  total_equality_deletes: number | null; snapshot_history_count: number | null;
+  metadata_history_count: number | null;
+};
 type Metrics = {
   generated_at_utc: string;
   market: { state: string; next_expected_open_utc: string };
@@ -13,6 +24,7 @@ type Metrics = {
     final_metrics_at_utc: string | null; shutdown_reason: string | null;
   };
   loader: { last_commit_utc: string | null; last_received: number | null; last_inserted: number | null; recent_commits: Commit[] };
+  table: Table;
   alerts: Alert[];
 };
 
@@ -33,6 +45,18 @@ function utc(value: string | null): string {
 
 function metric(value: number | null): string {
   return value === null ? "—" : numberFormat.format(value);
+}
+
+function bytes(value: number | null): string {
+  if (value === null) return "—";
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let size = value;
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024;
+    index += 1;
+  }
+  return `${size >= 10 || index === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[index]}`;
 }
 
 function title(value: string): string {
@@ -74,7 +98,7 @@ function renderAlerts(alerts: Alert[]): void {
 }
 
 function render(metricsData: Metrics): void {
-  const { market, health, extractor, loader } = metricsData;
+  const { market, health, extractor, loader, table } = metricsData;
   const badge = byId<HTMLSpanElement>("health-badge");
   badge.textContent = title(health.status);
   badge.className = `badge ${health.status}`;
@@ -93,6 +117,20 @@ function render(metricsData: Metrics): void {
   byId("sent").textContent = metric(extractor.messages_sent);
   byId("delivery-failures").textContent = metric(extractor.delivery_failures);
   byId("extractor-errors").textContent = metric(extractor.errors);
+  byId("table-records").textContent = metric(table.total_records);
+  byId("table-files").textContent = metric(table.total_data_files);
+  byId("table-size").textContent = bytes(table.total_files_size_bytes);
+  byId("table-operation").textContent = table.latest_operation ? title(table.latest_operation) : "—";
+  byId("table-average-file").textContent = bytes(table.average_data_file_size_bytes);
+  byId("table-average-rows").textContent = metric(table.average_rows_per_data_file);
+  byId("table-snapshots").textContent = metric(table.snapshot_history_count);
+  byId("table-delete-files").textContent = metric(table.total_delete_files);
+  byId("table-commit-detail").textContent = table.status === "available"
+    ? `Current Iceberg commit ${utc(table.current_snapshot_commit_utc)} · ${metric(table.latest_added_records)} rows · ${metric(table.latest_added_data_files)} file${table.latest_added_data_files === 1 ? "" : "s"} · ${bytes(table.latest_added_files_size_bytes)}.`
+    : "Table metadata is not available in this dashboard run.";
+  byId("table-maintenance-detail").textContent = table.status === "available"
+    ? `Metadata updated ${utc(table.last_metadata_update_utc)} · ${metric(table.metadata_history_count)} retained metadata versions · ${metric(table.total_delete_files)} delete files.`
+    : "Table health is informational and does not affect pipeline health.";
   byId("shutdown-detail").textContent = extractor.shutdown_reason
     ? `Clean shutdown after ${title(extractor.shutdown_reason)}.`
     : extractor.status === "observed" ? "Live session observed; final metrics are pending."

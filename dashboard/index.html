@@ -69,6 +69,40 @@
         </article>
       </section>
 
+      <section class="grid operational-grid" aria-label="Iceberg table metrics">
+        <article class="card wide">
+          <div class="card-heading">
+            <div>
+              <p class="label">Iceberg table</p>
+              <h2>Current table size</h2>
+            </div>
+          </div>
+          <dl class="metric-list table-metric-list">
+            <div><dt>Logical rows</dt><dd id="table-records">—</dd></div>
+            <div><dt>Data files</dt><dd id="table-files">—</dd></div>
+            <div><dt>Data size</dt><dd id="table-size">—</dd></div>
+            <div><dt>Operation</dt><dd id="table-operation">—</dd></div>
+          </dl>
+          <p id="table-commit-detail" class="detail">Table metadata unavailable.</p>
+        </article>
+
+        <article class="card wide">
+          <div class="card-heading">
+            <div>
+              <p class="label">Iceberg maintenance</p>
+              <h2>File health</h2>
+            </div>
+          </div>
+          <dl class="metric-list table-metric-list">
+            <div><dt>Average file</dt><dd id="table-average-file">—</dd></div>
+            <div><dt>Rows per file</dt><dd id="table-average-rows">—</dd></div>
+            <div><dt>Snapshots</dt><dd id="table-snapshots">—</dd></div>
+            <div><dt>Delete files</dt><dd id="table-delete-files">—</dd></div>
+          </dl>
+          <p id="table-maintenance-detail" class="detail">Table metadata unavailable.</p>
+        </article>
+      </section>
+
       <section class="grid lower-grid">
         <article class="card">
           <p class="label">Attention</p>
