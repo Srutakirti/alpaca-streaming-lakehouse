@@ -21,6 +21,7 @@ COMMIT_PATTERN = re.compile(
     r"committed_at=(?P<committed_at>\S+) received=(?P<received>\d+) inserted=(?P<inserted>\d+)"
 )
 SAFE_ICEBERG_OPERATIONS = {"append", "overwrite", "replace", "delete"}
+METADATA_VERSION_PATTERN = re.compile(r"[1-9]\d*")
 
 
 @dataclass(frozen=True)
@@ -112,11 +113,41 @@ def read_gcloud_logs(project_id: str, start: datetime) -> list[dict[str, Any]]:
     return entries
 
 
+def read_iceberg_table_metadata(metadata_uri: str) -> dict[str, Any]:
+    """Read exactly the current Iceberg metadata JSON through version-hint.text."""
+    prefix = _validated_metadata_uri(metadata_uri)
+    version = _gcloud_storage_text(f"{prefix}/version-hint.text").strip()
+    if not METADATA_VERSION_PATTERN.fullmatch(version):
+        raise ValueError("invalid Iceberg metadata version hint")
+    metadata = json.loads(_gcloud_storage_text(f"{prefix}/v{version}.metadata.json"))
+    if not isinstance(metadata, dict):
+        raise ValueError("Iceberg metadata JSON must be an object")
+    return metadata
+
+
+def _validated_metadata_uri(value: str) -> str:
+    prefix = value.rstrip("/")
+    if not prefix.startswith("gs://") or not prefix.endswith("/metadata") or ".." in prefix:
+        raise ValueError("metadata URI must be a GCS metadata directory")
+    return prefix
+
+
+def _gcloud_storage_text(uri: str) -> str:
+    result = subprocess.run(
+        ["gcloud", "storage", "cat", uri],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout
+
+
 def build_snapshot(
     entries: Iterable[dict[str, Any]],
     settings: DashboardSettings,
     now: datetime,
     table_metadata: dict[str, Any] | None = None,
+    table_unavailable_reason: str = "not_configured",
 ) -> dict[str, Any]:
     """Build a public-safe metric document without forwarding raw log fields."""
     now = now.astimezone(UTC)
@@ -157,7 +188,7 @@ def build_snapshot(
 
     extractor = _extractor_summary(extractor_events)
     loader = _loader_summary(commits, settings.history_limit)
-    table = summarize_table_metadata(table_metadata)
+    table = summarize_table_metadata(table_metadata, unavailable_reason=table_unavailable_reason)
     health = _health(state, now, extractor, loader, alerts, settings)
     return {
         "schema_version": 1,
@@ -254,9 +285,11 @@ def _loader_summary(commits: list[dict[str, Any]], limit: int) -> dict[str, Any]
     }
 
 
-def summarize_table_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+def summarize_table_metadata(
+    metadata: dict[str, Any] | None, unavailable_reason: str = "not_configured"
+) -> dict[str, Any]:
     """Return public-safe current-table metrics from one Iceberg metadata JSON."""
-    result = _unavailable_table("not_configured")
+    result = _unavailable_table(unavailable_reason)
     if not isinstance(metadata, dict):
         return result
 
@@ -414,12 +447,18 @@ def main() -> None:
         type=Path,
         help="Local Iceberg metadata JSON for contract testing; no cloud storage read",
     )
+    parser.add_argument(
+        "--iceberg-metadata-uri",
+        help="GCS metadata directory; reads version-hint.text and one current metadata JSON",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--now", help="RFC3339 UTC timestamp for reproducible testing")
     parser.add_argument("--lookback-hours", type=int, default=36)
     args = parser.parse_args()
     if bool(args.project) == bool(args.input):
         parser.error("provide exactly one of --project or --input")
+    if args.table_metadata_input and args.iceberg_metadata_uri:
+        parser.error("use at most one table metadata input")
     now = parse_utc(args.now) if args.now else datetime.now(UTC)
     if args.input:
         entries = json.loads(args.input.read_text())
@@ -427,10 +466,23 @@ def main() -> None:
     else:
         project_id = args.project
         entries = read_gcloud_logs(project_id, now - timedelta(hours=args.lookback_hours))
-    table_metadata = (
-        json.loads(args.table_metadata_input.read_text()) if args.table_metadata_input else None
+    table_metadata = None
+    table_unavailable_reason = "not_configured"
+    if args.table_metadata_input:
+        table_metadata = json.loads(args.table_metadata_input.read_text())
+    elif args.iceberg_metadata_uri:
+        try:
+            table_metadata = read_iceberg_table_metadata(args.iceberg_metadata_uri)
+        except (OSError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError):
+            table_unavailable_reason = "read_failed"
+            print("table_metadata=unavailable reason=read_failed")
+    snapshot = build_snapshot(
+        entries,
+        DashboardSettings(project_id=project_id),
+        now,
+        table_metadata,
+        table_unavailable_reason,
     )
-    snapshot = build_snapshot(entries, DashboardSettings(project_id=project_id), now, table_metadata)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
 

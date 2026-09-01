@@ -34,6 +34,7 @@ branch, and this exact workflow file.
    | `GCP_DASHBOARD_PROJECT_ID` | `project-66783f65-9c3e-4880-9a3` |
    | `GCP_DASHBOARD_WORKLOAD_IDENTITY_PROVIDER` | Terraform output `dashboard_workload_identity_provider` |
    | `GCP_DASHBOARD_METRICS_SERVICE_ACCOUNT` | Terraform output `dashboard_metrics_service_account` |
+   | `GCP_DASHBOARD_ICEBERG_METADATA_URI` | Terraform output `dashboard_iceberg_metadata_uri` |
 
    These values identify public resources and contain no credential. The
    short-lived credential exists only inside the GitHub Actions job.
@@ -56,6 +57,11 @@ the actual `America/New_York` state:
   stale-data alerts.
 
 The initial design is not exchange-holiday aware.
+
+The metadata URI is a GitHub repository variable, not public dashboard output.
+The exporter reads only its `version-hint.text` and current `vNNN.metadata.json`
+object. It emits aggregates such as counts and sizes; it never publishes the
+URI, metadata version, manifest locations, schema, table UUID, or properties.
 
 ## Local UI validation
 

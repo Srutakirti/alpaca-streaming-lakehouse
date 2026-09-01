@@ -39,6 +39,12 @@ No service-account key is created. The workflow exchanges its GitHub OIDC token
 for short-lived, read-only GCP credentials. The variables can be overridden if
 the repository, default branch, or workflow filename changes.
 
+The dashboard identity also receives one conditional `roles/storage.objectViewer`
+binding on the warehouse bucket. The condition permits reads only below
+`warehouse/alpaca_candidate/bars_direct/metadata/`, so the exporter can read
+`version-hint.text` and the current metadata JSON but cannot read table data
+files, arbitrary manifests, or write any object.
+
 For an existing deployment, use its original `resource_prefix` exactly. A
 different prefix describes a different VM, network, service account, and
 buckets; Terraform will plan replacement resources rather than update the

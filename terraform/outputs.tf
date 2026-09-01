@@ -25,3 +25,7 @@ output "dashboard_metrics_service_account" {
 output "dashboard_workload_identity_provider" {
   value = google_iam_workload_identity_pool_provider.github_actions.name
 }
+
+output "dashboard_iceberg_metadata_uri" {
+  value = "gs://${google_storage_bucket.warehouse.name}/${var.dashboard_iceberg_metadata_prefix}"
+}

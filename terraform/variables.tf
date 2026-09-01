@@ -69,3 +69,14 @@ variable "github_dashboard_workflow_file" {
     error_message = "github_dashboard_workflow_file must be a YAML filename."
   }
 }
+
+variable "dashboard_iceberg_metadata_prefix" {
+  description = "Warehouse object prefix containing the one Iceberg table's metadata files for the public dashboard."
+  type        = string
+  default     = "warehouse/alpaca_candidate/bars_direct/metadata/"
+
+  validation {
+    condition     = can(regex("^warehouse/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/metadata/$", var.dashboard_iceberg_metadata_prefix))
+    error_message = "dashboard_iceberg_metadata_prefix must be warehouse/NAMESPACE/TABLE/metadata/."
+  }
+}

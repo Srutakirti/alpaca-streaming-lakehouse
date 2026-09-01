@@ -171,11 +171,16 @@ Status: complete (`c5a95f6`).
   maintenance indicators separately from loader batches.
 - Commit after the production frontend build passes.
 
+Status: complete (`8dea33d`).
+
 ### M3: Conditional GCS read identity
 
 - Add a bucket IAM condition limited to the configured table `metadata/`
   prefix; add configuration and read the current version via `version-hint.text`.
 - Review the Terraform plan before applying the new permission.
+
+Status: prepared for review. The plan is one conditional object-viewer binding
+for `warehouse/alpaca_candidate/bars_direct/metadata/`; cloud apply is pending.
 
 ### M4: Live acceptance
 

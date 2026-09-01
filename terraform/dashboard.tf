@@ -11,6 +11,20 @@ resource "google_project_iam_member" "dashboard_metrics_logging_viewer" {
   member  = "serviceAccount:${google_service_account.dashboard_metrics_reader.email}"
 }
 
+# The public-dashboard exporter can read only this table's Iceberg metadata
+# directory. It cannot read Parquet data files, manifests elsewhere, or write.
+resource "google_storage_bucket_iam_member" "dashboard_metadata_reader" {
+  bucket = google_storage_bucket.warehouse.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.dashboard_metrics_reader.email}"
+
+  condition {
+    title       = "dashboard_iceberg_metadata_only"
+    description = "Read only the configured public-dashboard Iceberg metadata objects"
+    expression  = "resource.name.startsWith('projects/_/buckets/${google_storage_bucket.warehouse.name}/objects/${var.dashboard_iceberg_metadata_prefix}')"
+  }
+}
+
 # GitHub's OIDC issuer is trusted only for the dashboard workflow on the
 # configured repository branch. The action exchanges that proof for temporary
 # credentials; no service-account key is created or stored in GitHub.

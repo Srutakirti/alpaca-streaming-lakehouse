@@ -8,6 +8,7 @@ from dashboard.export_metrics import (
     build_snapshot,
     fixed_log_filters,
     market_state,
+    read_iceberg_table_metadata,
     read_gcloud_logs,
     summarize_table_metadata,
 )
@@ -152,3 +153,38 @@ def test_invalid_table_metadata_is_safe_and_does_not_break_pipeline_health() -> 
     assert snapshot["table"]["status"] == "unavailable"
     assert snapshot["table"]["reason"] == "missing_current_snapshot"
     assert snapshot["health"]["status"] == "unhealthy"
+
+
+def test_iceberg_metadata_reader_uses_only_hint_and_current_metadata(monkeypatch) -> None:
+    calls = []
+    metadata = json.loads(TABLE_FIXTURE.read_text())
+
+    def fake_storage_text(uri):
+        calls.append(uri)
+        return "4531\n" if uri.endswith("version-hint.text") else json.dumps(metadata)
+
+    monkeypatch.setattr("dashboard.export_metrics._gcloud_storage_text", fake_storage_text)
+
+    assert read_iceberg_table_metadata("gs://example-bucket/warehouse/table/metadata") == metadata
+    assert calls == [
+        "gs://example-bucket/warehouse/table/metadata/version-hint.text",
+        "gs://example-bucket/warehouse/table/metadata/v4531.metadata.json",
+    ]
+
+
+def test_iceberg_metadata_reader_rejects_bad_hint_without_fetching_metadata(monkeypatch) -> None:
+    calls = []
+
+    def fake_storage_text(uri):
+        calls.append(uri)
+        return "v4531\n"
+
+    monkeypatch.setattr("dashboard.export_metrics._gcloud_storage_text", fake_storage_text)
+
+    try:
+        read_iceberg_table_metadata("gs://example-bucket/warehouse/table/metadata")
+    except ValueError as error:
+        assert "version hint" in str(error)
+    else:
+        raise AssertionError("bad version hint was accepted")
+    assert calls == ["gs://example-bucket/warehouse/table/metadata/version-hint.text"]

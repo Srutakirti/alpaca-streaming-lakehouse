@@ -23,6 +23,7 @@ jobs:
       DASHBOARD_GCP_PROJECT: ${{ vars.GCP_DASHBOARD_PROJECT_ID }}
       DASHBOARD_WIF_PROVIDER: ${{ vars.GCP_DASHBOARD_WORKLOAD_IDENTITY_PROVIDER }}
       DASHBOARD_METRICS_SERVICE_ACCOUNT: ${{ vars.GCP_DASHBOARD_METRICS_SERVICE_ACCOUNT }}
+      DASHBOARD_ICEBERG_METADATA_URI: ${{ vars.GCP_DASHBOARD_ICEBERG_METADATA_URI }}
     steps:
       - name: Check out the default-branch source
         uses: actions/checkout@v7
@@ -49,6 +50,7 @@ jobs:
         run: >-
           uv run --no-project python dashboard/export_metrics.py
           --project "$DASHBOARD_GCP_PROJECT"
+          --iceberg-metadata-uri "$DASHBOARD_ICEBERG_METADATA_URI"
           --output dashboard/public/metrics.json
 
       - name: Set up GitHub Pages
