@@ -493,6 +493,17 @@ def _safe_top_services(value: Any) -> list[dict[str, Any]]:
     return services
 
 
+def _cost_read_failure_code(error: Exception) -> str:
+    """Classify a command failure without forwarding command output publicly."""
+    if isinstance(error, subprocess.CalledProcessError):
+        detail = (error.stderr or "").lower()
+        if "permission" in detail or "access denied" in detail:
+            return "permission_denied"
+        if "not found" in detail:
+            return "not_found"
+    return "command_failed"
+
+
 def _metadata_integer(value: Any) -> int | None:
     if isinstance(value, int) and value >= 0:
         return value
@@ -626,9 +637,9 @@ def main() -> None:
     elif args.cost_snapshot_table:
         try:
             cost_snapshot = read_cost_snapshot(args.cost_snapshot_table)
-        except (OSError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError):
+        except (OSError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError) as error:
             cost_unavailable_reason = "read_failed"
-            print("cost_snapshot=unavailable reason=read_failed")
+            print(f"cost_snapshot=unavailable reason=read_failed detail={_cost_read_failure_code(error)}")
     snapshot = build_snapshot(
         entries,
         DashboardSettings(project_id=project_id),
