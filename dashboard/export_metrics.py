@@ -439,7 +439,13 @@ def _safe_snapshot_timestamp(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
     try:
-        return utc_text(parse_utc(value))
+        # `bq head --format=json` represents TIMESTAMP values as a timezone-less
+        # string. BigQuery TIMESTAMP is always an absolute UTC instant, so add
+        # that timezone explicitly rather than relying on the runner's locale.
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return utc_text(parsed)
     except ValueError:
         return None
 
