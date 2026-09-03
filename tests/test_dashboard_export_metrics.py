@@ -245,15 +245,59 @@ def test_invalid_cost_snapshot_is_informational_only() -> None:
 
 def test_cost_reader_uses_one_bounded_table_data_read(monkeypatch) -> None:
     commands = []
+    requests = []
 
     def fake_run(command, **_kwargs):
         commands.append(command)
-        return SimpleNamespace(stdout=json.dumps([{"currency": "USD"}]))
+        return SimpleNamespace(stdout="short-lived-token\n")
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "rows": [
+                        {
+                            "f": [
+                                {"v": "2026-09-03 06:07:00"},
+                                {"v": "2026-09-03 05:53:14"},
+                                {"v": "USD"},
+                                {"v": "2.57"},
+                                {"v": "0.86"},
+                                {"v": [{"v": {"f": [{"v": "2026-09-03"}, {"v": "0.66"}]}}]},
+                                {"v": [{"v": {"f": [{"v": "Compute Engine"}, {"v": "0.52"}]}}]},
+                            ]
+                        }
+                    ]
+                }
+            ).encode()
+
+    def fake_urlopen(request, **_kwargs):
+        requests.append(request)
+        return FakeResponse()
 
     monkeypatch.setattr("dashboard.export_metrics.subprocess.run", fake_run)
+    monkeypatch.setattr("dashboard.export_metrics.urllib.request.urlopen", fake_urlopen)
 
-    assert read_cost_snapshot("example-project.dashboard_metrics.cost_snapshot") == {"currency": "USD"}
-    assert commands == [[
-        "bq", "head", "--format=json", "--max_rows=1",
-        "example-project:dashboard_metrics.cost_snapshot",
-    ]]
+    cost_snapshot = read_cost_snapshot("example-project.dashboard_metrics.cost_snapshot")
+    assert cost_snapshot == {
+        "aggregated_at_utc": "2026-09-03 06:07:00",
+        "source_exported_at_utc": "2026-09-03 05:53:14",
+        "currency": "USD",
+        "seven_day_net_cost": "2.57",
+        "month_to_date_net_cost": "0.86",
+        "daily_costs": [{"day_utc": "2026-09-03", "net_cost": "0.66"}],
+        "top_services": [{"service_name": "Compute Engine", "net_cost": "0.52"}],
+    }
+    assert commands == [["gcloud", "auth", "print-access-token"]]
+    assert requests[0].full_url.endswith("/projects/example-project/datasets/dashboard_metrics/tables/cost_snapshot/data?maxResults=1")
+    assert requests[0].get_header("Authorization") == "Bearer short-lived-token"
+    assert build_snapshot(
+        [], DashboardSettings(project_id="example-project"), datetime(2026, 9, 3, 12, tzinfo=UTC),
+        cost_snapshot=cost_snapshot,
+    )["costs"]["status"] == "available"

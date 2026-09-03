@@ -7,6 +7,8 @@ import argparse
 import json
 import re
 import subprocess
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
@@ -26,6 +28,15 @@ COST_SNAPSHOT_TABLE_PATTERN = re.compile(
     r"^[a-z][a-z0-9-]{4,61}[a-z0-9]\.[A-Za-z_][A-Za-z0-9_]{0,1023}\.[A-Za-z_][A-Za-z0-9_]{0,1023}$"
 )
 SAFE_SERVICE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9 .&()+/_-]{1,96}$")
+COST_SNAPSHOT_COLUMNS = (
+    "aggregated_at_utc",
+    "source_exported_at_utc",
+    "currency",
+    "seven_day_net_cost",
+    "month_to_date_net_cost",
+    "daily_costs",
+    "top_services",
+)
 
 
 @dataclass(frozen=True)
@@ -147,23 +158,72 @@ def _gcloud_storage_text(uri: str) -> str:
 
 
 def read_cost_snapshot(table: str) -> dict[str, Any]:
-    """Read one pre-aggregated cost row without submitting a BigQuery query."""
+    """Read one pre-aggregated cost row without submitting a BigQuery job."""
     if not COST_SNAPSHOT_TABLE_PATTERN.fullmatch(table):
         raise ValueError("cost snapshot table must be PROJECT.DATASET.TABLE")
     project, dataset, table_name = table.split(".", maxsplit=2)
-    # BigQuery SQL uses PROJECT.DATASET.TABLE, but bq table-data commands use
-    # PROJECT:DATASET.TABLE.
-    bq_table = f"{project}:{dataset}.{table_name}"
+    access_token = _gcloud_access_token()
+    endpoint = (
+        "https://bigquery.googleapis.com/bigquery/v2/projects/"
+        f"{urllib.parse.quote(project, safe='')}/datasets/{urllib.parse.quote(dataset, safe='')}"
+        f"/tables/{urllib.parse.quote(table_name, safe='')}/data?maxResults=1"
+    )
+    request = urllib.request.Request(endpoint, headers={"Authorization": f"Bearer {access_token}"})
+    with urllib.request.urlopen(request, timeout=30) as response:  # nosec B310: fixed Google API host
+        payload = json.load(response)
+    return _decode_cost_snapshot_tabledata(payload)
+
+
+def _gcloud_access_token() -> str:
+    """Obtain the short-lived credential created by the GitHub WIF action."""
     result = subprocess.run(
-        ["bq", "head", "--format=json", "--max_rows=1", bq_table],
+        ["gcloud", "auth", "print-access-token"],
         check=True,
         capture_output=True,
         text=True,
     )
-    rows = json.loads(result.stdout)
+    access_token = result.stdout.strip()
+    if not access_token:
+        raise ValueError("gcloud returned an empty access token")
+    return access_token
+
+
+def _decode_cost_snapshot_tabledata(payload: Any) -> dict[str, Any]:
+    """Decode the fixed public aggregate schema returned by tabledata.list."""
+    if not isinstance(payload, dict):
+        raise ValueError("BigQuery table-data response must be an object")
+    rows = payload.get("rows")
     if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
-        raise ValueError("cost snapshot must contain exactly one object row")
-    return rows[0]
+        raise ValueError("cost snapshot must contain exactly one row")
+    fields = rows[0].get("f")
+    if not isinstance(fields, list) or len(fields) != len(COST_SNAPSHOT_COLUMNS):
+        raise ValueError("cost snapshot row has an unexpected schema")
+    values = [_tabledata_value(field) for field in fields]
+    snapshot = dict(zip(COST_SNAPSHOT_COLUMNS, values, strict=True))
+    snapshot["daily_costs"] = _tabledata_records(snapshot["daily_costs"], ("day_utc", "net_cost"))
+    snapshot["top_services"] = _tabledata_records(snapshot["top_services"], ("service_name", "net_cost"))
+    return snapshot
+
+
+def _tabledata_value(field: Any) -> Any:
+    if not isinstance(field, dict) or "v" not in field:
+        raise ValueError("cost snapshot field has an unexpected shape")
+    return field["v"]
+
+
+def _tabledata_records(value: Any, names: tuple[str, str]) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ValueError("cost snapshot repeated field has an unexpected shape")
+    records: list[dict[str, Any]] = []
+    for entry in value:
+        record = _tabledata_value(entry)
+        if not isinstance(record, dict):
+            raise ValueError("cost snapshot repeated record has an unexpected shape")
+        record_fields = record.get("f")
+        if not isinstance(record_fields, list) or len(record_fields) != len(names):
+            raise ValueError("cost snapshot repeated record has an unexpected schema")
+        records.append(dict(zip(names, (_tabledata_value(field) for field in record_fields), strict=True)))
+    return records
 
 
 def build_snapshot(
@@ -443,14 +503,17 @@ def _safe_snapshot_timestamp(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
     try:
-        # `bq head --format=json` represents TIMESTAMP values as a timezone-less
-        # string. BigQuery TIMESTAMP is always an absolute UTC instant, so add
-        # that timezone explicitly rather than relying on the runner's locale.
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=UTC)
+        # tabledata.list encodes TIMESTAMP as Unix seconds, while fixture input
+        # and the prior CLI reader use RFC3339-like strings. Both represent an
+        # absolute UTC instant; never rely on the runner's local timezone.
+        if re.fullmatch(r"-?\d+(?:\.\d+)?", value):
+            parsed = datetime.fromtimestamp(float(value), tz=UTC)
+        else:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=UTC)
         return utc_text(parsed)
-    except ValueError:
+    except (OverflowError, OSError, ValueError):
         return None
 
 

@@ -213,7 +213,8 @@ The raw billing export is never read by GitHub Actions or exposed publicly.
   month-to-date net cost, the top three month-to-date services, currency, and
   export freshness.
 - Give the dashboard identity `bigquery.dataViewer` only on the safe aggregate
-  dataset. It receives neither raw billing access nor `bigquery.jobs.create`.
+  dataset. It uses BigQuery's direct table-data REST endpoint and receives no
+  raw billing access or permission to create BigQuery jobs.
 - Shift GitHub Actions cron minutes away from high-contention boundaries.
 
 ### C2: Exporter contract and UI
