@@ -29,3 +29,11 @@ output "dashboard_workload_identity_provider" {
 output "dashboard_iceberg_metadata_uri" {
   value = "gs://${google_storage_bucket.warehouse.name}/${var.dashboard_iceberg_metadata_prefix}"
 }
+
+output "dashboard_cost_dataset" {
+  value = google_bigquery_dataset.dashboard_costs.dataset_id
+}
+
+output "dashboard_cost_snapshot_table" {
+  value = "${var.project_id}.${google_bigquery_dataset.dashboard_costs.dataset_id}.cost_snapshot"
+}

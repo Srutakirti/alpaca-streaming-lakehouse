@@ -4,10 +4,11 @@ on:
   workflow_dispatch:
   schedule:
     # Covers both EST and EDT market hours; the exporter determines NY state.
-    - cron: "*/15 13-22 * * 1-5"
+    # Offset from common Actions schedule boundaries to reduce delayed/dropped runs.
+    - cron: "7,22,37,52 13-22 * * 1-5"
     # Keep off-hours state current without spending runner minutes every 15 minutes.
-    - cron: "0 0-12,23 * * 1-5"
-    - cron: "0 12 * * 0,6"
+    - cron: "7 0-12,23 * * 1-5"
+    - cron: "7 12 * * 0,6"
 
 concurrency:
   group: public-dashboard
@@ -24,6 +25,7 @@ jobs:
       DASHBOARD_WIF_PROVIDER: ${{ vars.GCP_DASHBOARD_WORKLOAD_IDENTITY_PROVIDER }}
       DASHBOARD_METRICS_SERVICE_ACCOUNT: ${{ vars.GCP_DASHBOARD_METRICS_SERVICE_ACCOUNT }}
       DASHBOARD_ICEBERG_METADATA_URI: ${{ vars.GCP_DASHBOARD_ICEBERG_METADATA_URI }}
+      DASHBOARD_COST_SNAPSHOT_TABLE: ${{ vars.GCP_DASHBOARD_COST_SNAPSHOT_TABLE }}
     steps:
       - name: Check out the default-branch source
         uses: actions/checkout@v7
@@ -51,6 +53,7 @@ jobs:
           uv run --no-project python dashboard/export_metrics.py
           --project "$DASHBOARD_GCP_PROJECT"
           --iceberg-metadata-uri "$DASHBOARD_ICEBERG_METADATA_URI"
+          --cost-snapshot-table "$DASHBOARD_COST_SNAPSHOT_TABLE"
           --output dashboard/public/metrics.json
 
       - name: Set up GitHub Pages

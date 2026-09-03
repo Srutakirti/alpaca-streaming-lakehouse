@@ -1,0 +1,21 @@
+{
+  "aggregated_at_utc": "2026-09-03T06:07:00Z",
+  "source_exported_at_utc": "2026-09-03T05:53:14Z",
+  "currency": "USD",
+  "seven_day_net_cost": "2.57",
+  "month_to_date_net_cost": "0.86",
+  "daily_costs": [
+    {"day_utc": "2026-08-28", "net_cost": "0.30"},
+    {"day_utc": "2026-08-29", "net_cost": "0.34"},
+    {"day_utc": "2026-08-30", "net_cost": "0.32"},
+    {"day_utc": "2026-08-31", "net_cost": "0.35"},
+    {"day_utc": "2026-09-01", "net_cost": "0.29"},
+    {"day_utc": "2026-09-02", "net_cost": "0.31"},
+    {"day_utc": "2026-09-03", "net_cost": "0.66"}
+  ],
+  "top_services": [
+    {"service_name": "Compute Engine", "net_cost": "0.52"},
+    {"service_name": "Cloud Storage", "net_cost": "0.19"},
+    {"service_name": "BigQuery", "net_cost": "0.11"}
+  ]
+}

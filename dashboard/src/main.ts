@@ -13,6 +13,13 @@ type Table = {
   total_equality_deletes: number | null; snapshot_history_count: number | null;
   metadata_history_count: number | null;
 };
+type Cost = {
+  status: "available" | "unavailable"; reason: string | null; currency: string | null;
+  aggregated_at_utc: string | null; source_exported_at_utc: string | null;
+  today_net_cost: number | null; seven_day_net_cost: number | null; month_to_date_net_cost: number | null;
+  daily_costs: { day_utc: string; net_cost: number }[];
+  top_services: { service_name: string; net_cost: number }[];
+};
 type Metrics = {
   generated_at_utc: string;
   market: { state: string; next_expected_open_utc: string };
@@ -25,6 +32,7 @@ type Metrics = {
   };
   loader: { last_commit_utc: string | null; last_received: number | null; last_inserted: number | null; recent_commits: Commit[] };
   table: Table;
+  costs: Cost;
   alerts: Alert[];
 };
 
@@ -57,6 +65,17 @@ function bytes(value: number | null): string {
     index += 1;
   }
   return `${size >= 10 || index === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[index]}`;
+}
+
+function money(value: number | null, currency: string | null): string {
+  if (value === null || currency === null) return "—";
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${value.toFixed(2)} ${currency}`;
+  }
 }
 
 function title(value: string): string {
@@ -97,8 +116,45 @@ function renderAlerts(alerts: Alert[]): void {
   });
 }
 
+function renderCostChart(costs: Cost): void {
+  const chart = byId<HTMLDivElement>("cost-chart");
+  const empty = byId<HTMLParagraphElement>("cost-chart-empty");
+  if (costs.daily_costs.length === 0) {
+    chart.replaceChildren();
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  const largest = Math.max(...costs.daily_costs.map((cost) => Math.abs(cost.net_cost)), 0.01);
+  chart.replaceChildren(...costs.daily_costs.map((cost) => {
+    const column = document.createElement("div");
+    const bar = document.createElement("span");
+    bar.style.height = `${Math.max(8, (Math.abs(cost.net_cost) / largest) * 100)}%`;
+    bar.title = `${cost.day_utc} · ${money(cost.net_cost, costs.currency)}`;
+    column.append(bar);
+    return column;
+  }));
+}
+
+function renderTopServices(costs: Cost): void {
+  const list = byId<HTMLUListElement>("top-services");
+  list.replaceChildren();
+  if (costs.top_services.length === 0) {
+    list.innerHTML = "<li>No cost data available.</li>";
+    return;
+  }
+  costs.top_services.forEach((service, index) => {
+    const item = document.createElement("li");
+    item.textContent = `${index + 1}. ${service.service_name}`;
+    const amount = document.createElement("strong");
+    amount.textContent = money(service.net_cost, costs.currency);
+    item.append(amount);
+    list.append(item);
+  });
+}
+
 function render(metricsData: Metrics): void {
-  const { market, health, extractor, loader, table } = metricsData;
+  const { market, health, extractor, loader, table, costs } = metricsData;
   const badge = byId<HTMLSpanElement>("health-badge");
   badge.textContent = title(health.status);
   badge.className = `badge ${health.status}`;
@@ -131,6 +187,12 @@ function render(metricsData: Metrics): void {
   byId("table-maintenance-detail").textContent = table.status === "available"
     ? `Metadata updated ${utc(table.last_metadata_update_utc)} · ${metric(table.metadata_history_count)} retained metadata versions · ${metric(table.total_delete_files)} delete files.`
     : "Table health is informational and does not affect pipeline health.";
+  byId("cost-today").textContent = money(costs.today_net_cost, costs.currency);
+  byId("cost-seven-day").textContent = money(costs.seven_day_net_cost, costs.currency);
+  byId("cost-mtd").textContent = money(costs.month_to_date_net_cost, costs.currency);
+  byId("cost-detail").textContent = costs.status === "available"
+    ? `Estimated usage cost · UTC · billing export refreshed ${utc(costs.source_exported_at_utc)} · aggregate refreshed ${utc(costs.aggregated_at_utc)}.`
+    : "Cost data is not available in this dashboard run. Pipeline health is unaffected.";
   byId("shutdown-detail").textContent = extractor.shutdown_reason
     ? `Clean shutdown after ${title(extractor.shutdown_reason)}.`
     : extractor.status === "observed" ? "Live session observed; final metrics are pending."
@@ -146,6 +208,8 @@ function render(metricsData: Metrics): void {
   notice.hidden = market.state !== "weekend" && market.state !== "closed";
   notice.textContent = "No bars are expected outside the market session. The last completed session remains visible.";
   renderChart(loader.recent_commits);
+  renderCostChart(costs);
+  renderTopServices(costs);
   renderAlerts(metricsData.alerts);
 }
 

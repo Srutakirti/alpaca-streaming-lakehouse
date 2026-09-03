@@ -17,5 +17,7 @@ h2 { margin: .2rem 0 0; font-size: 1.15rem; }
 .metric { margin: .45rem 0; font-size: 1.95rem; font-weight: 750; letter-spacing: -.04em; }.metric.compact { font-size: 1.15rem; line-height: 1.45; }.detail { margin: .3rem 0 0; font-size: .9rem; }
 .metric-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin: 1.3rem 0 0; }.metric-list div { padding: .7rem; background: #0b192a; border-radius: .5rem; }.metric-list dt { color: #8aa4c0; font-size: .76rem; }.metric-list dd { margin: .2rem 0 0; font-size: 1.25rem; font-weight: 700; }
 .chart { display: flex; align-items: end; gap: .28rem; height: 9rem; padding-top: 1rem; }.chart div { flex: 1; height: 100%; display: flex; align-items: end; }.chart span { width: 100%; min-height: 3px; background: linear-gradient(#7bdcff, #3189ca); border-radius: .2rem .2rem 0 0; }
+.cost-chart { height: 6.5rem; }.cost-chart span { background: linear-gradient(#86e3bd, #27855f); }
+.service-costs { display: grid; gap: .75rem; margin: 1.3rem 0 0; padding-left: 1.5rem; color: #c5d2e0; }.service-costs li { display: flex; justify-content: space-between; gap: 1rem; }.service-costs strong { color: #86e3bd; white-space: nowrap; }
 .alerts { margin: 1rem 0 0; padding-left: 1.2rem; color: #c5d2e0; }.alerts li + li { margin-top: .55rem; }
 @media (max-width: 760px) { .shell { padding-top: 2rem; }.masthead { flex-direction: column; }.header-meta { align-items: start; }.status-grid, .operational-grid, .lower-grid { grid-template-columns: 1fr; }.metric-list { grid-template-columns: repeat(2, 1fr); } }

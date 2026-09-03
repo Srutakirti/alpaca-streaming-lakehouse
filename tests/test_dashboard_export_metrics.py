@@ -8,6 +8,7 @@ from dashboard.export_metrics import (
     build_snapshot,
     fixed_log_filters,
     market_state,
+    read_cost_snapshot,
     read_iceberg_table_metadata,
     read_gcloud_logs,
     summarize_table_metadata,
@@ -16,6 +17,7 @@ from dashboard.export_metrics import (
 
 FIXTURE = Path(__file__).parent / "fixtures" / "dashboard" / "market_close.json"
 TABLE_FIXTURE = Path(__file__).parent / "fixtures" / "dashboard" / "table_metadata.json"
+COST_FIXTURE = Path(__file__).parent / "fixtures" / "dashboard" / "cost_snapshot.json"
 
 
 def test_market_close_fixture_is_sanitized_and_reports_clean_shutdown() -> None:
@@ -188,3 +190,70 @@ def test_iceberg_metadata_reader_rejects_bad_hint_without_fetching_metadata(monk
     else:
         raise AssertionError("bad version hint was accepted")
     assert calls == ["gs://example-bucket/warehouse/table/metadata/version-hint.text"]
+
+
+def test_cost_snapshot_exposes_only_safe_aggregate_values() -> None:
+    snapshot = build_snapshot(
+        [],
+        DashboardSettings(project_id="example-project"),
+        datetime(2026, 9, 3, 12, 0, tzinfo=UTC),
+        cost_snapshot=json.loads(COST_FIXTURE.read_text()),
+    )
+
+    assert snapshot["costs"] == {
+        "status": "available",
+        "reason": None,
+        "currency": "USD",
+        "aggregated_at_utc": "2026-09-03T06:07:00Z",
+        "source_exported_at_utc": "2026-09-03T05:53:14Z",
+        "today_net_cost": 0.66,
+        "seven_day_net_cost": 2.57,
+        "month_to_date_net_cost": 0.86,
+        "daily_costs": [
+            {"day_utc": "2026-08-28", "net_cost": 0.3},
+            {"day_utc": "2026-08-29", "net_cost": 0.34},
+            {"day_utc": "2026-08-30", "net_cost": 0.32},
+            {"day_utc": "2026-08-31", "net_cost": 0.35},
+            {"day_utc": "2026-09-01", "net_cost": 0.29},
+            {"day_utc": "2026-09-02", "net_cost": 0.31},
+            {"day_utc": "2026-09-03", "net_cost": 0.66},
+        ],
+        "top_services": [
+            {"service_name": "Compute Engine", "net_cost": 0.52},
+            {"service_name": "Cloud Storage", "net_cost": 0.19},
+            {"service_name": "BigQuery", "net_cost": 0.11},
+        ],
+    }
+    rendered = json.dumps(snapshot["costs"])
+    assert "example-project" not in rendered
+    assert "billing_account" not in rendered
+    assert snapshot["health"] == {"status": "unknown", "reasons": ["no_recent_session"]}
+
+
+def test_invalid_cost_snapshot_is_informational_only() -> None:
+    snapshot = build_snapshot(
+        [],
+        DashboardSettings(project_id="example-project"),
+        datetime(2026, 8, 27, 21, 20, tzinfo=UTC),
+        cost_snapshot={"currency": "USD"},
+    )
+
+    assert snapshot["costs"]["status"] == "unavailable"
+    assert snapshot["costs"]["reason"] == "invalid_snapshot"
+    assert snapshot["health"] == {"status": "unknown", "reasons": ["no_recent_session"]}
+
+
+def test_cost_reader_uses_one_bounded_table_data_read(monkeypatch) -> None:
+    commands = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        return SimpleNamespace(stdout=json.dumps([{"currency": "USD"}]))
+
+    monkeypatch.setattr("dashboard.export_metrics.subprocess.run", fake_run)
+
+    assert read_cost_snapshot("example-project.dashboard_metrics.cost_snapshot") == {"currency": "USD"}
+    assert commands == [[
+        "bq", "head", "--format=json", "--max_rows=1",
+        "example-project.dashboard_metrics.cost_snapshot",
+    ]]

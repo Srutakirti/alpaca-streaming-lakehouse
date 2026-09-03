@@ -196,3 +196,38 @@ metadata for the latest `append`, 4,623,785 total records, 4,530 data files,
 899,223,658 total bytes, latest delta, and history counts. The published JSON
 passed a boundary check for GCS paths, metadata version, UUID, manifests,
 project ID, and VM identifier.
+
+## Billing-cost extension
+
+The public dashboard will publish exact project-scoped estimated usage cost in
+USD. It is not an invoice total: Cloud Billing exports are asynchronous and may
+revise recent usage with late credits or adjustments. All date buckets are UTC.
+The raw billing export is never read by GitHub Actions or exposed publicly.
+
+### C1: Private aggregate infrastructure
+
+- Create a dedicated BigQuery dataset in the billing export's `us-east1`
+  location and a dedicated scheduled-query service account.
+- Run a six-hourly, overwrite-only scheduled query against the raw standard
+  billing export. It writes one safe snapshot containing seven daily net costs,
+  month-to-date net cost, the top three month-to-date services, currency, and
+  export freshness.
+- Give the dashboard identity `bigquery.dataViewer` only on the safe aggregate
+  dataset. It receives neither raw billing access nor `bigquery.jobs.create`.
+- Shift GitHub Actions cron minutes away from high-contention boundaries.
+
+### C2: Exporter contract and UI
+
+- Read the one aggregate snapshot with BigQuery table-data read access, not a
+  new query job.
+- Add an informational cost section: today-so-far (partial), seven-day total,
+  MTD, export freshness, seven daily values, and three MTD services.
+- Keep cost-read failures separate from pipeline health and publish no project,
+  dataset, billing-account, SKU, label, resource, or raw billing details.
+
+### C3: Live acceptance
+
+- Review and apply the Terraform plan.
+- Manually run the scheduled aggregate, compare it with an operator query
+  against the raw export, then dispatch the dashboard workflow.
+- Verify the public page and `metrics.json` show safe aggregate values only.

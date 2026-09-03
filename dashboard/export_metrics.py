@@ -22,6 +22,10 @@ COMMIT_PATTERN = re.compile(
 )
 SAFE_ICEBERG_OPERATIONS = {"append", "overwrite", "replace", "delete"}
 METADATA_VERSION_PATTERN = re.compile(r"[1-9]\d*")
+COST_SNAPSHOT_TABLE_PATTERN = re.compile(
+    r"^[a-z][a-z0-9-]{4,61}[a-z0-9]\.[A-Za-z_][A-Za-z0-9_]{0,1023}\.[A-Za-z_][A-Za-z0-9_]{0,1023}$"
+)
+SAFE_SERVICE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9 .&()+/_-]{1,96}$")
 
 
 @dataclass(frozen=True)
@@ -142,12 +146,30 @@ def _gcloud_storage_text(uri: str) -> str:
     return result.stdout
 
 
+def read_cost_snapshot(table: str) -> dict[str, Any]:
+    """Read one pre-aggregated cost row without submitting a BigQuery query."""
+    if not COST_SNAPSHOT_TABLE_PATTERN.fullmatch(table):
+        raise ValueError("cost snapshot table must be PROJECT.DATASET.TABLE")
+    result = subprocess.run(
+        ["bq", "head", "--format=json", "--max_rows=1", table],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rows = json.loads(result.stdout)
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
+        raise ValueError("cost snapshot must contain exactly one object row")
+    return rows[0]
+
+
 def build_snapshot(
     entries: Iterable[dict[str, Any]],
     settings: DashboardSettings,
     now: datetime,
     table_metadata: dict[str, Any] | None = None,
     table_unavailable_reason: str = "not_configured",
+    cost_snapshot: dict[str, Any] | None = None,
+    cost_unavailable_reason: str = "not_configured",
 ) -> dict[str, Any]:
     """Build a public-safe metric document without forwarding raw log fields."""
     now = now.astimezone(UTC)
@@ -189,15 +211,17 @@ def build_snapshot(
     extractor = _extractor_summary(extractor_events)
     loader = _loader_summary(commits, settings.history_limit)
     table = summarize_table_metadata(table_metadata, unavailable_reason=table_unavailable_reason)
+    costs = summarize_cost_snapshot(cost_snapshot, now, unavailable_reason=cost_unavailable_reason)
     health = _health(state, now, extractor, loader, alerts, settings)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at_utc": utc_text(now),
         "market": {"state": state, "next_expected_open_utc": utc_text(next_open)},
         "health": health,
         "extractor": extractor,
         "loader": loader,
         "table": table,
+        "costs": costs,
         "alerts": alerts[:20],
     }
 
@@ -361,6 +385,108 @@ def _unavailable_table(reason: str) -> dict[str, Any]:
     }
 
 
+def summarize_cost_snapshot(
+    snapshot: dict[str, Any] | None, now: datetime, unavailable_reason: str = "not_configured"
+) -> dict[str, Any]:
+    """Validate and reduce a private BigQuery cost aggregate to public-safe values."""
+    unavailable = _unavailable_costs(unavailable_reason)
+    if not isinstance(snapshot, dict):
+        return unavailable
+
+    currency = snapshot.get("currency")
+    if not isinstance(currency, str) or not re.fullmatch(r"[A-Z]{3}", currency):
+        return _unavailable_costs("invalid_snapshot")
+    aggregated_at = _safe_snapshot_timestamp(snapshot.get("aggregated_at_utc"))
+    source_exported_at = _safe_snapshot_timestamp(snapshot.get("source_exported_at_utc"))
+    seven_day = _safe_cost(snapshot.get("seven_day_net_cost"))
+    month_to_date = _safe_cost(snapshot.get("month_to_date_net_cost"))
+    daily_costs = _safe_daily_costs(snapshot.get("daily_costs"))
+    top_services = _safe_top_services(snapshot.get("top_services"))
+    if aggregated_at is None or seven_day is None or month_to_date is None:
+        return _unavailable_costs("invalid_snapshot")
+    today = now.astimezone(UTC).date().isoformat()
+    today_cost = next((item["net_cost"] for item in daily_costs if item["day_utc"] == today), None)
+    return {
+        "status": "available",
+        "reason": None,
+        "currency": currency,
+        "aggregated_at_utc": aggregated_at,
+        "source_exported_at_utc": source_exported_at,
+        "today_net_cost": today_cost,
+        "seven_day_net_cost": seven_day,
+        "month_to_date_net_cost": month_to_date,
+        "daily_costs": daily_costs,
+        "top_services": top_services,
+    }
+
+
+def _unavailable_costs(reason: str) -> dict[str, Any]:
+    return {
+        "status": "unavailable",
+        "reason": reason,
+        "currency": None,
+        "aggregated_at_utc": None,
+        "source_exported_at_utc": None,
+        "today_net_cost": None,
+        "seven_day_net_cost": None,
+        "month_to_date_net_cost": None,
+        "daily_costs": [],
+        "top_services": [],
+    }
+
+
+def _safe_snapshot_timestamp(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return utc_text(parse_utc(value))
+    except ValueError:
+        return None
+
+
+def _safe_cost(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not number < float("inf") or not number > float("-inf"):
+        return None
+    return round(number, 2)
+
+
+def _safe_daily_costs(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    daily: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict) or not isinstance(item.get("day_utc"), str):
+            continue
+        try:
+            datetime.fromisoformat(item["day_utc"]).date()
+        except ValueError:
+            continue
+        cost = _safe_cost(item.get("net_cost"))
+        if cost is not None:
+            daily.append({"day_utc": item["day_utc"], "net_cost": cost})
+    return sorted(daily, key=lambda item: item["day_utc"])[-7:]
+
+
+def _safe_top_services(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    services: list[dict[str, Any]] = []
+    for item in value[:3]:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("service_name")
+        cost = _safe_cost(item.get("net_cost"))
+        if isinstance(name, str) and SAFE_SERVICE_NAME_PATTERN.fullmatch(name) and cost is not None:
+            services.append({"service_name": name, "net_cost": cost})
+    return services
+
+
 def _metadata_integer(value: Any) -> int | None:
     if isinstance(value, int) and value >= 0:
         return value
@@ -451,6 +577,15 @@ def main() -> None:
         "--iceberg-metadata-uri",
         help="GCS metadata directory; reads version-hint.text and one current metadata JSON",
     )
+    parser.add_argument(
+        "--cost-snapshot-input",
+        type=Path,
+        help="Local safe BigQuery cost snapshot row for contract testing; no cloud read",
+    )
+    parser.add_argument(
+        "--cost-snapshot-table",
+        help="Safe BigQuery aggregate table; reads one row without submitting a query job",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--now", help="RFC3339 UTC timestamp for reproducible testing")
     parser.add_argument("--lookback-hours", type=int, default=36)
@@ -459,6 +594,8 @@ def main() -> None:
         parser.error("provide exactly one of --project or --input")
     if args.table_metadata_input and args.iceberg_metadata_uri:
         parser.error("use at most one table metadata input")
+    if args.cost_snapshot_input and args.cost_snapshot_table:
+        parser.error("use at most one cost snapshot input")
     now = parse_utc(args.now) if args.now else datetime.now(UTC)
     if args.input:
         entries = json.loads(args.input.read_text())
@@ -476,12 +613,24 @@ def main() -> None:
         except (OSError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError):
             table_unavailable_reason = "read_failed"
             print("table_metadata=unavailable reason=read_failed")
+    cost_snapshot = None
+    cost_unavailable_reason = "not_configured"
+    if args.cost_snapshot_input:
+        cost_snapshot = json.loads(args.cost_snapshot_input.read_text())
+    elif args.cost_snapshot_table:
+        try:
+            cost_snapshot = read_cost_snapshot(args.cost_snapshot_table)
+        except (OSError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError):
+            cost_unavailable_reason = "read_failed"
+            print("cost_snapshot=unavailable reason=read_failed")
     snapshot = build_snapshot(
         entries,
         DashboardSettings(project_id=project_id),
         now,
         table_metadata,
         table_unavailable_reason,
+        cost_snapshot,
+        cost_unavailable_reason,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")

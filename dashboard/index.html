@@ -103,6 +103,36 @@
         </article>
       </section>
 
+      <section class="grid operational-grid" aria-label="Cloud cost metrics">
+        <article class="card wide">
+          <div class="card-heading">
+            <div>
+              <p class="label">Estimated GCP usage cost</p>
+              <h2>Daily spend · UTC</h2>
+            </div>
+          </div>
+          <dl class="metric-list cost-metric-list">
+            <div><dt>Today so far</dt><dd id="cost-today">—</dd></div>
+            <div><dt>Last 7 days</dt><dd id="cost-seven-day">—</dd></div>
+            <div><dt>Month to date</dt><dd id="cost-mtd">—</dd></div>
+          </dl>
+          <div id="cost-chart" class="chart cost-chart" aria-label="Estimated daily cost for the last seven UTC days"></div>
+          <p id="cost-chart-empty" class="detail">No daily cost values are available.</p>
+          <p id="cost-detail" class="detail">Cost data is not available.</p>
+        </article>
+
+        <article class="card wide">
+          <div class="card-heading">
+            <div>
+              <p class="label">Month to date</p>
+              <h2>Top three services</h2>
+            </div>
+          </div>
+          <ol id="top-services" class="service-costs"><li>No cost data available.</li></ol>
+          <p class="detail">Ranked by estimated net cost, including applicable credits.</p>
+        </article>
+      </section>
+
       <section class="grid lower-grid">
         <article class="card">
           <p class="label">Attention</p>
