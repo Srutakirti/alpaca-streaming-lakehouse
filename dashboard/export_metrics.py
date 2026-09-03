@@ -150,8 +150,12 @@ def read_cost_snapshot(table: str) -> dict[str, Any]:
     """Read one pre-aggregated cost row without submitting a BigQuery query."""
     if not COST_SNAPSHOT_TABLE_PATTERN.fullmatch(table):
         raise ValueError("cost snapshot table must be PROJECT.DATASET.TABLE")
+    project, dataset, table_name = table.split(".", maxsplit=2)
+    # BigQuery SQL uses PROJECT.DATASET.TABLE, but bq table-data commands use
+    # PROJECT:DATASET.TABLE.
+    bq_table = f"{project}:{dataset}.{table_name}"
     result = subprocess.run(
-        ["bq", "head", "--format=json", "--max_rows=1", table],
+        ["bq", "head", "--format=json", "--max_rows=1", bq_table],
         check=True,
         capture_output=True,
         text=True,

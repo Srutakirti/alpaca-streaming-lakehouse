@@ -255,5 +255,5 @@ def test_cost_reader_uses_one_bounded_table_data_read(monkeypatch) -> None:
     assert read_cost_snapshot("example-project.dashboard_metrics.cost_snapshot") == {"currency": "USD"}
     assert commands == [[
         "bq", "head", "--format=json", "--max_rows=1",
-        "example-project.dashboard_metrics.cost_snapshot",
+        "example-project:dashboard_metrics.cost_snapshot",
     ]]
