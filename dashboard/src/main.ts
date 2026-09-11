@@ -36,8 +36,11 @@ type Metrics = {
   alerts: Alert[];
 };
 
-const timeFormat = new Intl.DateTimeFormat("en-GB", {
+const utcTimeFormat = new Intl.DateTimeFormat("en-GB", {
   timeZone: "UTC", dateStyle: "medium", timeStyle: "short", hour12: false,
+});
+const istTimeFormat = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short", hour12: false,
 });
 const numberFormat = new Intl.NumberFormat("en-US");
 
@@ -48,7 +51,12 @@ function byId<T extends HTMLElement>(id: string): T {
 }
 
 function utc(value: string | null): string {
-  return value ? `${timeFormat.format(new Date(value))} UTC` : "—";
+  return value ? `${utcTimeFormat.format(new Date(value))} UTC` : "—";
+}
+
+function utcAndIst(value: string): string {
+  const instant = new Date(value);
+  return `${utcTimeFormat.format(instant)} UTC · ${istTimeFormat.format(instant)} IST`;
 }
 
 function metric(value: number | null): string {
@@ -158,7 +166,7 @@ function render(metricsData: Metrics): void {
   const badge = byId<HTMLSpanElement>("health-badge");
   badge.textContent = title(health.status);
   badge.className = `badge ${health.status}`;
-  byId("generated-at").textContent = `Refreshed ${utc(metricsData.generated_at_utc)}`;
+  byId("generated-at").textContent = `Refreshed ${utcAndIst(metricsData.generated_at_utc)}`;
   byId("market-state").textContent = title(market.state);
   byId("next-open").textContent = utc(market.next_expected_open_utc);
   byId("last-bar").textContent = utc(extractor.last_bar_utc);
