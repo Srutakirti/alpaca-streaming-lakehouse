@@ -142,7 +142,10 @@ def batch_command(settings: Settings, expected: Snapshot, run_id: str) -> list[s
     return [
         "gcloud", "dataproc", "batches", "submit", "pyspark", "iceberg-maintenance/compact_table.py",
         f"--project={settings.project}", f"--region={settings.region}", f"--batch={run_id}",
-        f"--service-account={settings.service_account}", f"--staging-bucket={settings.staging_bucket}",
+        f"--service-account={settings.service_account}",
+        # Dataproc uploads the local PySpark file and resolved dependencies to the deps bucket.
+        # Passing only --staging-bucket leaves that upload location unset in the gcloud CLI.
+        f"--deps-bucket={settings.staging_bucket}", f"--staging-bucket={settings.staging_bucket}",
         f"--properties={properties}", "--",
         "--namespace", settings.namespace, "--table", settings.table,
         "--expected-snapshot-id", expected.snapshot_id,
