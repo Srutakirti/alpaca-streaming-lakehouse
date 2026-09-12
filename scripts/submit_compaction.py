@@ -139,6 +139,8 @@ def batch_command(settings: Settings, expected: Snapshot, run_id: str) -> list[s
             "spark.sql.catalog.hadoop=org.apache.iceberg.spark.SparkCatalog",
             "spark.sql.catalog.hadoop.type=hadoop",
             f"spark.sql.catalog.hadoop.warehouse={settings.warehouse}",
+            # The Alpaca wire schema intentionally has distinct `T` and `t` fields.
+            "spark.sql.caseSensitive=true",
             f"spark.jars.packages={settings.iceberg_runtime_package}",
             "spark.dynamicAllocation.enabled=false",
             f"spark.executor.instances={settings.executor_instances}",

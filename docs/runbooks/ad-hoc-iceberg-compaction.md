@@ -83,6 +83,8 @@ standard Serverless Spark tier, disables dynamic allocation, and limits the batc
 two executors. It also disables post-failure auto diagnostics so a failed ad-hoc run
 releases its minimum 12-vCPU allocation promptly; driver output and Cloud Logging
 remain available. The batch ends after one compaction and leaves no compute running.
+It enables case-sensitive Spark SQL because the Alpaca table contains distinct `T` and
+`t` fields that cannot be rewritten through Spark's default case-insensitive resolver.
 
 ## Success criteria
 

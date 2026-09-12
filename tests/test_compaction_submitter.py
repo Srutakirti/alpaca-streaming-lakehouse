@@ -71,6 +71,7 @@ def test_batch_command_keeps_expected_snapshot_and_fixed_executor_cap() -> None:
     properties = next(value for value in command if value.startswith("--properties="))
     assert "spark.executor.instances=2" in properties
     assert "spark.dynamicAllocation.enabled=false" in properties
+    assert "spark.sql.caseSensitive=true" in properties
     assert "spark.dataproc.driver.disk.size=250g" in properties
     assert "spark.dataproc.executor.disk.size=250g" in properties
     assert "dataproc.diagnostics.enabled=false" in properties
