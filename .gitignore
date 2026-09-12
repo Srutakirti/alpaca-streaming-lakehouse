@@ -4,6 +4,8 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+*.egg-info/
+.logs/
 iceberg-loader-java/target/
 websocket-extractor-rust/target/
 dist/

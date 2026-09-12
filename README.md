@@ -4,6 +4,9 @@ Checkpoint 1 provides a local, bounded synthetic pipeline. It uses Tansu with
 SQLite for Kafka-compatible transport and a long-lived Java Iceberg-core loader
 with `HadoopCatalog`; Spark is not in the write path. All timestamps are UTC.
 
+See the [end-to-end architecture](docs/end-to-end-architecture.md) for the complete production
+flow from Alpaca ingestion through Iceberg storage and the public dashboard.
+
 ## Local synthetic run
 
 Build and validate the complete non-Spark flow with

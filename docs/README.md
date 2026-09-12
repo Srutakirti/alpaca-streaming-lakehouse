@@ -5,6 +5,7 @@ runbooks and the related documentation elsewhere in the repository.
 
 | Need | Document | Summary |
 | --- | --- | --- |
+| Understand the complete production data flow | [End-to-end architecture](end-to-end-architecture.md) | Ingestion, Iceberg storage, observability, dashboard delivery, and identity boundaries. |
 | Understand the project and run it locally | [Project README](../README.md) | Local synthetic and Fakepaca workflows, validation commands, and notebook entry point. |
 | Understand approved scope and rollout phases | [Clean-Slate GCE Hadoop Pipeline plan](../GCE_HADOOP_CATALOG_PLAN.md) | Checkpoints, operating rule, and architectural standards. |
 | Verify producer/loader data compatibility | [Alpaca bar frame contract](../contracts/README.md) | Kafka message shape shared by synthetic, Fakepaca, and direct-Alpaca producers. |
