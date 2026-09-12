@@ -33,7 +33,11 @@ def snapshot_metrics(spark: Any, table: str) -> dict[str, Any]:
     if snapshot is None:
         raise RuntimeError("table has no current snapshot")
     summary = dict(snapshot.summary or {})
-    file_count = spark.sql(f"SELECT COUNT(*) AS count FROM {table}.files").first().count()
+    # Do not alias this column to `count`: pyspark.sql.Row already exposes a
+    # tuple-like `count` method, which takes an argument and shadows the field.
+    file_count = spark.sql(
+        f"SELECT COUNT(*) AS data_file_count FROM {table}.files"
+    ).first().data_file_count
     total_records = summary.get("total-records")
     if total_records is None:
         raise RuntimeError("current snapshot does not report total-records")

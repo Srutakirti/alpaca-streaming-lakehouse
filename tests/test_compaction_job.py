@@ -31,7 +31,7 @@ class Spark:
                     summary={"total-records": "42"},
                 )
             )
-        return Result(SimpleNamespace(count=lambda: 3))
+        return Result(SimpleNamespace(data_file_count=3))
 
 
 def test_snapshot_metrics_calls_dataframe_count() -> None:
