@@ -61,8 +61,8 @@ def test_quiet_window_rejects_changed_metadata_or_snapshot() -> None:
 def test_batch_command_keeps_expected_snapshot_and_fixed_executor_cap() -> None:
     command = submit_compaction.batch_command(settings(), submit_compaction.Snapshot("42", "123"), "run-1")
 
-    assert "--deps-bucket=gs://example-staging" in command
-    assert "--staging-bucket=gs://example-staging" in command
+    assert "--deps-bucket=example-staging" in command
+    assert "--staging-bucket=example-staging" in command
     assert "--expected-snapshot-id" in command
     assert command[command.index("--expected-snapshot-id") + 1] == "123"
     properties = next(value for value in command if value.startswith("--properties="))
