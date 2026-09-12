@@ -56,7 +56,7 @@ def write_receipt(spark: Any, uri: str, receipt: dict[str, Any]) -> None:
     path = jvm.org.apache.hadoop.fs.Path(uri)
     output = path.getFileSystem(spark.sparkContext._jsc.hadoopConfiguration()).create(path, True)
     try:
-        output.write(jvm.java.lang.String(json.dumps(receipt, sort_keys=True)).getBytes("UTF-8"))
+        output.write(bytearray(json.dumps(receipt, sort_keys=True).encode("UTF-8")))
     finally:
         output.close()
 
