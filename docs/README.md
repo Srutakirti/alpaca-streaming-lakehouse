@@ -1,5 +1,8 @@
 # Documentation index
 
+- [Ad-hoc Iceberg compaction](runbooks/ad-hoc-iceberg-compaction.md): guarded manual
+  Dataproc Serverless file maintenance.
+
 This directory contains operational runbooks. The table below links those
 runbooks and the related documentation elsewhere in the repository.
 

@@ -37,3 +37,11 @@ output "dashboard_cost_dataset" {
 output "dashboard_cost_snapshot_table" {
   value = "${var.project_id}.${google_bigquery_dataset.dashboard_costs.dataset_id}.cost_snapshot"
 }
+
+output "iceberg_maintenance_service_account" {
+  value = google_service_account.iceberg_maintenance.email
+}
+
+output "iceberg_maintenance_staging_bucket" {
+  value = "gs://${google_storage_bucket.maintenance.name}"
+}

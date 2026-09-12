@@ -119,3 +119,13 @@ variable "dashboard_cost_schedule" {
   type        = string
   default     = "every 6 hours"
 }
+
+variable "maintenance_bucket_name" {
+  description = "Globally unique GCS bucket for transient Dataproc compaction artifacts and receipts."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$", var.maintenance_bucket_name))
+    error_message = "maintenance_bucket_name must be a valid GCS bucket name."
+  }
+}
