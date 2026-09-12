@@ -75,6 +75,7 @@ Defaults are intentionally bounded and can be changed per run:
 ```bash
 export COMPACTION_TARGET_FILE_SIZE_BYTES=134217728  # 128 MiB
 export COMPACTION_EXECUTOR_INSTANCES=2             # fixed upper cost shape
+export COMPACTION_DISK_SIZE_GIB=250                # minimum per driver/executor
 ```
 
 The submitter pins Dataproc runtime `2.3` and Iceberg runtime `1.9.2`, uses the

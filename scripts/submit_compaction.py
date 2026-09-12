@@ -40,6 +40,7 @@ class Settings:
     check_interval_seconds: int
     target_file_size_bytes: int
     executor_instances: int
+    disk_size_gib: int
     runtime_version: str
     iceberg_runtime_package: str
 
@@ -70,6 +71,7 @@ class Settings:
             check_interval_seconds=integer("COMPACTION_CHECK_INTERVAL_SECONDS", 60, 1),
             target_file_size_bytes=integer("COMPACTION_TARGET_FILE_SIZE_BYTES", 134_217_728, 8 * 1024 * 1024),
             executor_instances=integer("COMPACTION_EXECUTOR_INSTANCES", 2, 2),
+            disk_size_gib=integer("COMPACTION_DISK_SIZE_GIB", 250, 250),
             runtime_version=os.environ.get("COMPACTION_RUNTIME_VERSION", "2.3").strip(),
             iceberg_runtime_package=os.environ.get(
                 "COMPACTION_ICEBERG_RUNTIME_PACKAGE", "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.2"
@@ -140,6 +142,8 @@ def batch_command(settings: Settings, expected: Snapshot, run_id: str) -> list[s
             f"spark.jars.packages={settings.iceberg_runtime_package}",
             "spark.dynamicAllocation.enabled=false",
             f"spark.executor.instances={settings.executor_instances}",
+            f"spark.dataproc.driver.disk.size={settings.disk_size_gib}g",
+            f"spark.dataproc.executor.disk.size={settings.disk_size_gib}g",
             "dataproc.diagnostics.enabled=false",
         ]
     )
