@@ -27,6 +27,7 @@ def settings() -> object:
         check_interval_seconds=60,
         target_file_size_bytes=134_217_728,
         executor_instances=2,
+        runtime_version="2.3",
         iceberg_runtime_package="org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.2",
     )
 
@@ -63,6 +64,7 @@ def test_batch_command_keeps_expected_snapshot_and_fixed_executor_cap() -> None:
 
     assert "--deps-bucket=example-staging" in command
     assert "--staging-bucket=example-staging" in command
+    assert "--version=2.3" in command
     assert "--expected-snapshot-id" in command
     assert command[command.index("--expected-snapshot-id") + 1] == "123"
     properties = next(value for value in command if value.startswith("--properties="))

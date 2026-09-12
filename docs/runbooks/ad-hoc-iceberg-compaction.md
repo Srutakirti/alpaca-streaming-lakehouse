@@ -27,6 +27,7 @@ export ICEBERG_TABLE=bars_direct
 export COMPACTION_SERVICE_ACCOUNT=iceberg-maintenance@YOUR_PROJECT.iam.gserviceaccount.com
 export COMPACTION_STAGING_BUCKET=gs://YOUR_MAINTENANCE_BUCKET
 export COMPACTION_RECEIPT_DIRECTORY=gs://YOUR_MAINTENANCE_BUCKET/receipts/
+export COMPACTION_RUNTIME_VERSION=2.3
 ```
 
 ## Normal quiet-window submission

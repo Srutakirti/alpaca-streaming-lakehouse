@@ -40,6 +40,7 @@ class Settings:
     check_interval_seconds: int
     target_file_size_bytes: int
     executor_instances: int
+    runtime_version: str
     iceberg_runtime_package: str
 
     @classmethod
@@ -68,7 +69,8 @@ class Settings:
             quiet_window_seconds=integer("COMPACTION_QUIET_WINDOW_SECONDS", 900, 0),
             check_interval_seconds=integer("COMPACTION_CHECK_INTERVAL_SECONDS", 60, 1),
             target_file_size_bytes=integer("COMPACTION_TARGET_FILE_SIZE_BYTES", 134_217_728, 8 * 1024 * 1024),
-            executor_instances=integer("COMPACTION_EXECUTOR_INSTANCES", 2, 1),
+            executor_instances=integer("COMPACTION_EXECUTOR_INSTANCES", 2, 2),
+            runtime_version=os.environ.get("COMPACTION_RUNTIME_VERSION", "2.3").strip(),
             iceberg_runtime_package=os.environ.get(
                 "COMPACTION_ICEBERG_RUNTIME_PACKAGE", "org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.9.2"
             ),
@@ -81,6 +83,8 @@ class Settings:
             raise ValueError("COMPACTION_RECEIPT_DIRECTORY must be a gs:// directory ending in /")
         if not GCS_DIRECTORY.fullmatch(f"{settings.staging_bucket}/"):
             raise ValueError("COMPACTION_STAGING_BUCKET must be a gs:// bucket or directory")
+        if not re.fullmatch(r"[0-9]+\.[0-9]+", settings.runtime_version):
+            raise ValueError("COMPACTION_RUNTIME_VERSION must be a major.minor version, such as 2.3")
         for name, value in (("ICEBERG_NAMESPACE", settings.namespace), ("ICEBERG_TABLE", settings.table)):
             if not IDENTIFIER.fullmatch(value):
                 raise ValueError(f"{name} is invalid")
@@ -143,6 +147,7 @@ def batch_command(settings: Settings, expected: Snapshot, run_id: str) -> list[s
     return [
         "gcloud", "dataproc", "batches", "submit", "pyspark", "iceberg-maintenance/compact_table.py",
         f"--project={settings.project}", f"--region={settings.region}", f"--batch={run_id}",
+        f"--version={settings.runtime_version}",
         f"--service-account={settings.service_account}",
         # Dataproc uploads the local PySpark file and resolved dependencies to the deps bucket.
         # Passing only --staging-bucket leaves that upload location unset in the gcloud CLI.
