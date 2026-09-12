@@ -140,6 +140,7 @@ def batch_command(settings: Settings, expected: Snapshot, run_id: str) -> list[s
             f"spark.jars.packages={settings.iceberg_runtime_package}",
             "spark.dynamicAllocation.enabled=false",
             f"spark.executor.instances={settings.executor_instances}",
+            "dataproc.diagnostics.enabled=false",
         ]
     )
     receipt_uri = f"{settings.receipt_directory.rstrip('/')}/{run_id}.json"

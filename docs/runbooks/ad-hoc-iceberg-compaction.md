@@ -77,9 +77,11 @@ export COMPACTION_TARGET_FILE_SIZE_BYTES=134217728  # 128 MiB
 export COMPACTION_EXECUTOR_INSTANCES=2             # fixed upper cost shape
 ```
 
-The submitter pins Iceberg's Spark runtime to `1.9.2`, uses the standard Serverless
-Spark tier, disables dynamic allocation, and limits the batch to two executors. The
-batch ends after one compaction and leaves no compute running.
+The submitter pins Dataproc runtime `2.3` and Iceberg runtime `1.9.2`, uses the
+standard Serverless Spark tier, disables dynamic allocation, and limits the batch to
+two executors. It also disables post-failure auto diagnostics so a failed ad-hoc run
+releases its minimum 12-vCPU allocation promptly; driver output and Cloud Logging
+remain available. The batch ends after one compaction and leaves no compute running.
 
 ## Success criteria
 
