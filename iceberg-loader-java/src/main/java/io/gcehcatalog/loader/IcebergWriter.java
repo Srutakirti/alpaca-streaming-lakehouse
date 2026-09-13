@@ -17,6 +17,7 @@ import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.data.parquet.GenericParquetWriter;
 import org.apache.iceberg.catalog.Catalog;
+import org.apache.iceberg.exceptions.CommitStateUnknownException;
 import org.apache.iceberg.io.FileAppender;
 import org.apache.iceberg.io.OutputFile;
 import org.apache.iceberg.parquet.Parquet;
@@ -62,17 +63,39 @@ public final class IcebergWriter implements AutoCloseable {
     List<AlpacaBar> bars = new ArrayList<>(input);
 
     String path = table.location() + "/data/batch-" + Instant.now().toEpochMilli() + ".parquet";
-    OutputFile output = table.io().newOutputFile(path);
     long size;
-    try (FileAppender<Record> appender = Parquet.write(output).schema(SCHEMA)
-        .createWriterFunc(GenericParquetWriter::buildWriter).build()) {
-      String ingestedAt = Instant.now().toString();
-      for (AlpacaBar bar : bars) appender.add(record(bar, ingestedAt));
-      size = appender.length();
+    try {
+      OutputFile output = table.io().newOutputFile(path);
+      try (FileAppender<Record> appender = Parquet.write(output).schema(SCHEMA)
+          .createWriterFunc(GenericParquetWriter::buildWriter).build()) {
+        String ingestedAt = Instant.now().toString();
+        for (AlpacaBar bar : bars) appender.add(record(bar, ingestedAt));
+        size = appender.length();
+      }
+    } catch (Exception error) {
+      throw new LoaderCommitException(
+          LoaderCommitException.Type.DATA_FILE_WRITE_FAILED,
+          "not_committed",
+          "not_committed",
+          error);
     }
-    DataFile file = DataFiles.builder(table.spec()).withPath(path).withFileSizeInBytes(size)
-        .withRecordCount(bars.size()).build();
-    table.newAppend().appendFile(file).commit();
+    try {
+      DataFile file = DataFiles.builder(table.spec()).withPath(path).withFileSizeInBytes(size)
+          .withRecordCount(bars.size()).build();
+      table.newAppend().appendFile(file).commit();
+    } catch (CommitStateUnknownException error) {
+      throw new LoaderCommitException(
+          LoaderCommitException.Type.ICEBERG_COMMIT_STATE_UNKNOWN,
+          "unknown",
+          "not_committed",
+          error);
+    } catch (Exception error) {
+      throw new LoaderCommitException(
+          LoaderCommitException.Type.ICEBERG_COMMIT_FAILED,
+          "not_committed",
+          "not_committed",
+          error);
+    }
     return bars.size();
   }
 

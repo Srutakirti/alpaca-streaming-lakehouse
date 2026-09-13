@@ -13,6 +13,8 @@ final class BoundedBatch {
   record Entry(AlpacaBar bar, Source source, boolean finalBarOfSource) {}
   record Batch(List<Entry> entries) {
     List<AlpacaBar> bars() { return entries.stream().map(Entry::bar).toList(); }
+    int barCount() { return entries.size(); }
+    int sourceRecordCount() { return (int) entries.stream().map(Entry::source).distinct().count(); }
   }
 
   private final int maximumRecords;
@@ -34,6 +36,12 @@ final class BoundedBatch {
   }
 
   boolean isEmpty() { return pending.isEmpty(); }
+
+  int barCount() { return pending.size(); }
+
+  int sourceRecordCount() {
+    return (int) pending.stream().map(Entry::source).distinct().count();
+  }
 
   Batch drain() {
     if (pending.isEmpty()) throw new IllegalStateException("cannot drain an empty batch");

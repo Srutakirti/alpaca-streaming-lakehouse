@@ -46,6 +46,21 @@ class BoundedBatchTest {
     assertTrue(remainder.entries().get(remainder.entries().size() - 1).finalBarOfSource());
   }
 
+  @Test void countsDistinctKafkaSourceRecordsInPendingAndCompletedBatches() {
+    BoundedBatch buffer = new BoundedBatch(3);
+    BoundedBatch.Source first = new BoundedBatch.Source("bars", 0, 10);
+    BoundedBatch.Source second = new BoundedBatch.Source("bars", 0, 11);
+
+    assertTrue(buffer.add(first, bars(2)).isEmpty());
+    assertEquals(2, buffer.barCount());
+    assertEquals(1, buffer.sourceRecordCount());
+
+    BoundedBatch.Batch completed = buffer.add(second, bars(1)).get(0);
+    assertEquals(3, completed.barCount());
+    assertEquals(2, completed.sourceRecordCount());
+    assertTrue(buffer.isEmpty());
+  }
+
   private static List<AlpacaBar> bars(int count) {
     List<AlpacaBar> bars = new ArrayList<>();
     for (int index = 0; index < count; index++) {
