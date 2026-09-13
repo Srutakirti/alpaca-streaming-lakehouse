@@ -488,6 +488,7 @@ dev = [
     { name = "nbconvert" },
     { name = "pyspark" },
     { name = "pytest" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
@@ -500,6 +501,7 @@ dev = [
     { name = "nbconvert", specifier = ">=7.0" },
     { name = "pyspark", specifier = ">=3.5,<3.6" },
     { name = "pytest", specifier = ">=8.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [[package]]

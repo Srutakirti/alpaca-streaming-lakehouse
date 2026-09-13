@@ -13,6 +13,37 @@ or duplicating the loader's existing plain-text commit and library logs. Events
 never include credentials, raw Alpaca bars, exception messages, warehouse
 paths, or object names.
 
+On the VM, the version-controlled Ops Agent configuration routes these entries
+to `gce_hadoop_catalog_loader_json`. It retains only records from
+`iceberg-loader.service` whose journal `MESSAGE` starts with `LOADER_HEALTH `,
+removes the prefix, parses the remainder, and copies `jsonPayload.level` to the
+Cloud Logging `severity` field. The original health record is excluded from the
+plain `gce_hadoop_catalog_journal` stream to avoid duplicates.
+
+The resulting Cloud Logging payload keeps journald provenance alongside the
+health contract:
+
+```json
+{
+  "severity": "INFO",
+  "jsonPayload": {
+    "_SYSTEMD_UNIT": "iceberg-loader.service",
+    "timestamp": "2026-09-13T15:01:49.599102174Z",
+    "level": "INFO",
+    "target": "iceberg_loader::health",
+    "fields": {
+      "event": "heartbeat",
+      "state": "starting"
+    }
+  },
+  "logName": "projects/PROJECT_ID/logs/gce_hadoop_catalog_loader_json"
+}
+```
+
+The future dashboard exporter must query this dedicated log name, systemd unit,
+target, time lower bound, and the specific event types required for each
+calculation. It must not retrieve the general journal and filter it locally.
+
 ## Essential values
 
 | Value | Definition |

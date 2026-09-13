@@ -149,7 +149,7 @@ The VM uses Google Cloud Ops Agent to send selected systemd journal events to
 Cloud Logging. The source template is
 [`gce-hadoop-catalog-logging.yaml`](../../deployment/ops-agent/gce-hadoop-catalog-logging.yaml).
 
-The configuration creates two Cloud Logging streams from the system journal:
+The configuration creates three Cloud Logging streams from the system journal:
 
 - `gce_hadoop_catalog_journal` contains the Tansu and loader entries plus
   systemd/timer lifecycle messages. Rust extractor application entries are
@@ -158,6 +158,11 @@ The configuration creates two Cloud Logging streams from the system journal:
   `alpaca-extractor.service` or `fakepaca-extractor.service`. The agent parses
   each extractor `MESSAGE` JSON object, so its top-level `timestamp`, `level`,
   `target`, and `fields` values are queryable as `jsonPayload` fields.
+- `gce_hadoop_catalog_loader_json` contains only `LOADER_HEALTH` entries from
+  `iceberg-loader.service`. The agent removes the prefix, parses the JSON, and
+  copies its `level` into Cloud Logging `severity`. Loader health entries are
+  excluded from `gce_hadoop_catalog_journal` to prevent duplicate ingestion;
+  other Java, Hadoop, Iceberg, and application records remain in that stream.
 
 For example, show final metrics from the direct extractor:
 
@@ -165,6 +170,20 @@ For example, show final metrics from the direct extractor:
 log_id("gce_hadoop_catalog_extractor_json")
 jsonPayload.fields.message="final metrics"
 ```
+
+Show only the loader's latest structured health records:
+
+```text
+log_id("gce_hadoop_catalog_loader_json")
+jsonPayload._SYSTEMD_UNIT="iceberg-loader.service"
+jsonPayload.target="iceberg_loader::health"
+jsonPayload.fields.event="heartbeat"
+```
+
+The dedicated receiver ID determines the Cloud Logging log name. Processor
+order is significant: exclude unrelated journal entries, remove the
+`LOADER_HEALTH` prefix, parse the extracted JSON, then promote its level to
+Cloud Logging severity.
 
 `jsonPayload.fields.snapshot` remains a JSON string because the extractor
 currently encodes that value as a string inside its outer JSON event.

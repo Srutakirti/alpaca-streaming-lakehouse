@@ -1,12 +1,14 @@
 # Copy to /etc/google-cloud-ops-agent/config.yaml on the VM, then restart
 # google-cloud-ops-agent. This keeps application journal events while excluding
 # unrelated host journal traffic and one known Kafka INFO message. Rust extractor
-# events are emitted as JSON and are routed to their own parsed log stream.
+# events and Java loader health events are routed to dedicated parsed log streams.
 logging:
   receivers:
     gce_hadoop_catalog_journal:
       type: systemd_journald
     gce_hadoop_catalog_extractor_json:
+      type: systemd_journald
+    gce_hadoop_catalog_loader_json:
       type: systemd_journald
   processors:
     exclude_non_pipeline_journal:
@@ -26,6 +28,13 @@ logging:
       type: exclude_logs
       match_any:
         - 'jsonPayload._SYSTEMD_UNIT =~ "^(alpaca-extractor.service|fakepaca-extractor.service)$"'
+    # Loader health is retained in the dedicated parsed stream. Other loader
+    # and Iceberg library records remain in the plain journal for diagnosis.
+    exclude_loader_health_from_plain_journal:
+      type: exclude_logs
+      match_any:
+        - 'jsonPayload._SYSTEMD_UNIT = "iceberg-loader.service" AND
+           jsonPayload.MESSAGE =~ "^LOADER_HEALTH "'
     # This receiver sees the same journal but retains only application entries
     # from either Rust extractor before parsing their MESSAGE field as JSON.
     exclude_non_extractor_journal:
@@ -35,6 +44,26 @@ logging:
     parse_extractor_json:
       type: parse_json
       field: MESSAGE
+    # Keep only the loader's deliberately bounded health contract. Filtering
+    # happens before parsing so ordinary Java/Hadoop/Iceberg output cannot
+    # enter the dedicated loader-health log.
+    exclude_non_loader_health_journal:
+      type: exclude_logs
+      match_any:
+        - 'NOT (jsonPayload._SYSTEMD_UNIT = "iceberg-loader.service" AND
+           jsonPayload.MESSAGE =~ "^LOADER_HEALTH ")'
+    extract_loader_health_json:
+      type: parse_regex
+      field: MESSAGE
+      regex: '^LOADER_HEALTH (?<loader_health_json>\{.*\})$'
+    parse_loader_health_json:
+      type: parse_json
+      field: loader_health_json
+    set_loader_health_severity:
+      type: modify_fields
+      fields:
+        severity:
+          copy_from: jsonPayload.level
   service:
     pipelines:
       # Override the built-in /var/log/syslog collector.
@@ -46,11 +75,19 @@ logging:
           - exclude_non_pipeline_journal
           - exclude_loader_kafka_telemetry
           - exclude_extractor_from_plain_journal
+          - exclude_loader_health_from_plain_journal
       gce_hadoop_catalog_extractor_json:
         receivers: [gce_hadoop_catalog_extractor_json]
         processors:
           - exclude_non_extractor_journal
           - parse_extractor_json
+      gce_hadoop_catalog_loader_json:
+        receivers: [gce_hadoop_catalog_loader_json]
+        processors:
+          - exclude_non_loader_health_journal
+          - extract_loader_health_json
+          - parse_loader_health_json
+          - set_loader_health_severity
 
 # Preserve the existing low-ingestion configuration. The Ops Agent's metrics
 # sub-process remains installed, but it sends no host metrics.
