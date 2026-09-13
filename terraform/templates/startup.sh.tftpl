@@ -11,13 +11,14 @@ install -d -o root -g root -m 0755 /opt/gce-hadoop-catalog/releases /etc/gce-had
 
 cat >/etc/gce-hadoop-catalog/runtime.env <<'EOF'
 KAFKA_BROKER=127.0.0.1:19092
-KAFKA_TOPIC=alpaca-bars
+KAFKA_TOPIC=alpaca-bars-direct-candidate
+KAFKA_GROUP_ID=alpaca-iceberg-loader-direct-candidate
 PIPELINE_RUNTIME_DIR=/var/lib/gce-hadoop-catalog/runtime
 ICEBERG_CATALOG_TYPE=hadoop
 ICEBERG_CATALOG_NAME=local
 ICEBERG_WAREHOUSE=${warehouse_uri}
-ICEBERG_NAMESPACE=alpaca
-ICEBERG_TABLE=bars_raw
+ICEBERG_NAMESPACE=alpaca_candidate
+ICEBERG_TABLE=bars_direct
 LOADER_JAR=/opt/gce-hadoop-catalog/current/lib/iceberg-loader.jar
 GCS_CONNECTOR_JAR=/opt/gce-hadoop-catalog/current/lib/gcs-connector.jar
 LOADER_MAX_POLL_RECORDS=1
@@ -26,6 +27,7 @@ LOADER_HEARTBEAT_SECONDS=60
 LOADER_STALL_SECONDS=900
 LOADER_MAX_RECORDS=1000
 LOADER_MAX_SECONDS=300
+LOADER_JAVA_OPTS="-Xms128m -Xmx384m -Dorg.slf4j.simpleLogger.log.org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter=warn"
 EOF
 chmod 0640 /etc/gce-hadoop-catalog/runtime.env
 chown root:gcehcatalog /etc/gce-hadoop-catalog/runtime.env

@@ -79,6 +79,15 @@ LOADER_MAX_POLL_RECORDS   Kafka records returned per poll; fixed at 1 for safe b
 LOADER_JAVA_OPTS          JVM sizing for the loader, normally -Xms128m -Xmx384m on the e2-micro
 ```
 
+For the approved direct-Alpaca candidate pipeline, the shared runtime file must
+use `KAFKA_TOPIC=alpaca-bars-direct-candidate`,
+`KAFKA_GROUP_ID=alpaca-iceberg-loader-direct-candidate`,
+`ICEBERG_NAMESPACE=alpaca_candidate`, and `ICEBERG_TABLE=bars_direct`. The
+extractor-specific `KAFKA_TOPIC` must match. The Terraform startup template
+writes these values explicitly so a VM restart cannot silently reconnect the
+loader to the local synthetic defaults or reset the candidate topic to its
+earliest offset under a different consumer group.
+
 `/etc/gce-hadoop-catalog/fakepaca.env` and `alpaca.env` contain only extractor-specific values. They hold `ALPACA_KEY` and `ALPACA_SECRET`, which must never be committed, copied into a release archive, or printed in logs. Keep both files `root:gcehcatalog` with mode `0640`.
 
 ## Daily operations
@@ -184,6 +193,25 @@ The dedicated receiver ID determines the Cloud Logging log name. Processor
 order is significant: exclude unrelated journal entries, remove the
 `LOADER_HEALTH` prefix, parse the extracted JSON, then promote its level to
 Cloud Logging severity.
+
+When a new `systemd_journald` receiver is first added to an established VM,
+Fluent Bit has no saved cursor for that receiver and may replay the retained
+journal. For the first deployment of `gce_hadoop_catalog_loader_json`, stop the
+Ops Agent, seed the new receiver's cursor database from the existing pipeline
+journal receiver, and then restart the agent and loader:
+
+```bash
+sudo systemctl stop google-cloud-ops-agent.service
+sudo cp \
+  /var/lib/google-cloud-ops-agent/fluent-bit/buffers/gce_hadoop_catalog_gce_hadoop_catalog_journal \
+  /var/lib/google-cloud-ops-agent/fluent-bit/buffers/gce_hadoop_catalog_loader_json_gce_hadoop_catalog_loader_json
+sudo systemctl start google-cloud-ops-agent.service
+sudo systemctl restart iceberg-loader.service
+```
+
+This is a one-time migration for an existing machine, not a recurring service
+operation. Keep the agent stopped while copying the cursor database. A fresh
+VM has no historical journal to replay and does not need this step.
 
 `jsonPayload.fields.snapshot` remains a JSON string because the extractor
 currently encodes that value as a string inside its outer JSON event.
