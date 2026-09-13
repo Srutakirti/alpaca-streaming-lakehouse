@@ -2,6 +2,8 @@
 
 - [Ad-hoc Iceberg compaction](runbooks/ad-hoc-iceberg-compaction.md): guarded manual
   Dataproc Serverless file maintenance.
+- [Deferred Iceberg cleanup](runbooks/deferred-iceberg-cleanup.md): future snapshot
+  expiration and orphan-file removal plan; not currently implemented.
 
 This directory contains operational runbooks. The table below links those
 runbooks and the related documentation elsewhere in the repository.
@@ -14,6 +16,7 @@ runbooks and the related documentation elsewhere in the repository.
 | Verify producer/loader data compatibility | [Alpaca bar frame contract](../contracts/README.md) | Kafka message shape shared by synthetic, Fakepaca, and direct-Alpaca producers. |
 | Test each local Fakepaca component | [Local Fakepaca component testing](runbooks/local-fakepaca-component-testing.md) | Tansu, topic, loader, and extractor startup/shutdown sequence. |
 | Operate the deployed VM | [VM pipeline services](runbooks/vm-services.md) | systemd units, configuration, scheduling, memory, Cloud Logging, release safety, and deferred logging work. |
+| Plan snapshot and orphan cleanup | [Deferred Iceberg cleanup](runbooks/deferred-iceberg-cleanup.md) | Proposed retention, deletion safeguards, validation, and implementation checkpoints; planning only. |
 | Build or install a VM release | [Native VM release](../deployment/native/README.md) | Docker-free bundle contents, build, installation, runtime limits, and direct-Alpaca timer. |
 | Plan or change cloud foundation resources | [Terraform infrastructure](../terraform/README.md) | Isolated VM, GCS, IAM foundation, and safe Terraform planning. |
 | Configure or operate the public dashboard | [Public operations dashboard](runbooks/public-dashboard.md) | GitHub Pages data path, WIF variables, schedule, local validation, and troubleshooting. |
