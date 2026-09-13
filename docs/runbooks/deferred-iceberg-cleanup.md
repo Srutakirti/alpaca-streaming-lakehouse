@@ -95,8 +95,20 @@ expired snapshots is intentionally removed.
 No recurring schedule should be added until at least one manual cleanup has completed
 and its storage reduction, runtime, and cost have been reviewed.
 
+## Related operational follow-up
+
+- [x] Enable `tansu.service` and `iceberg-loader.service` to start at VM boot.
+- [x] Keep `alpaca-extractor.timer` enabled while leaving
+  `alpaca-extractor.service` unscheduled directly.
+- [ ] Perform a controlled VM stop/start validation. Confirm that Tansu becomes
+  ready, `tansu-topic.service` succeeds through the loader dependency chain, the
+  loader rejoins its Kafka consumer group at the committed offset, and the
+  extractor remains governed by its market-open timer.
+
+`tansu-topic.service` and `alpaca-extractor.service` are static units and do not
+need to be enabled directly.
+
 ## References
 
 - [Apache Iceberg maintenance](https://iceberg.apache.org/docs/nightly/maintenance/)
 - [Apache Iceberg 1.9.2 Spark procedures](https://iceberg.apache.org/docs/1.9.2/spark-procedures/)
-
