@@ -40,9 +40,11 @@ health contract:
 }
 ```
 
-The future dashboard exporter must query this dedicated log name, systemd unit,
-target, time lower bound, and the specific event types required for each
-calculation. It must not retrieve the general journal and filter it locally.
+The dashboard exporter queries this dedicated log name, exact systemd unit,
+target, candidate topic, time lower bound, and only the event types required for
+each calculation. It does not retrieve the general journal and filter it
+locally. Separate bounded reads collect four recent heartbeats, 100 commit
+boundary events (up to 50 complete commit pairs), and 20 classified failures.
 
 ## Essential values
 
@@ -65,6 +67,11 @@ calculation. It must not retrieve the general journal and filter it locally.
 
 One Kafka record represents one WebSocket frame and can contain multiple bars.
 Consequently, `lag_records` and `buffered_bars` measure different things.
+
+The public dashboard renames the Java event's camel-case partition members
+(`committedOffset`, `endOffset`, and `lagRecords`) to snake case. It publishes
+only the numeric offsets and partition number; the topic and raw event are not
+included in `metrics.json`.
 
 ## State inference
 
@@ -131,8 +138,9 @@ LOADER_MAX_POLL_RECORDS=1
 
 The 15-minute Kafka poll allowance prevents a known slow GCS/Iceberg commit
 from immediately removing this single consumer from its group. A blocked call
-cannot emit heartbeats from the same thread; the planned ten-minute heartbeat
-absence incident is the independent hang signal.
+cannot emit heartbeats from the same thread. During market hours, five minutes
+without a heartbeat is a warning and ten minutes is unhealthy. A reported
+`stalled` state is unhealthy immediately.
 
 ## Commit timing boundaries
 

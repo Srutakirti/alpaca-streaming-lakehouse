@@ -232,3 +232,20 @@ The raw billing export is never read by GitHub Actions or exposed publicly.
 - Manually run the scheduled aggregate, compare it with an operator query
   against the raw export, then dispatch the dashboard workflow.
 - Verify the public page and `metrics.json` show safe aggregate values only.
+
+## Structured loader-health extension
+
+### L1: Exporter contract and dashboard presentation — complete
+
+- Replace the broad loader-journal read with dedicated, event-allow-listed
+  loader-health queries bounded to a maximum 36-hour lookback.
+- Publish loader state, heartbeat, durable Kafka lag, in-memory buffers,
+  process start, last input/commit, classified failures, and paired durable
+  commit durations without publishing topic, raw logs, exception classes, or
+  infrastructure identifiers.
+- Replace the repetitive bounded-batch volume emphasis with current durable
+  progress and a recent commit-duration chart.
+- Treat missing/stale market-hours heartbeats and `stalled` as health failures;
+  a later successful commit resolves an earlier loader commit failure.
+- Validate fixed query filters against Cloud Logging, the public-data boundary,
+  unit tests, and a production frontend build.

@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "generated_at_utc": "2026-08-27T21:20:00Z",
   "market": { "state": "closed", "next_expected_open_utc": "2026-08-28T13:30:00Z" },
   "health": { "status": "healthy", "reasons": [] },
@@ -9,8 +9,13 @@
     "final_metrics_at_utc": "2026-08-27T21:10:24Z", "shutdown_reason": "idle_window"
   },
   "loader": {
-    "last_commit_utc": "2026-08-27T21:00:57Z", "last_received": 1000, "last_inserted": 1000,
-    "recent_commits": [{ "at_utc": "2026-08-27T21:00:57Z", "received": 1000, "inserted": 1000 }]
+    "status": "observed", "state": "idle", "latest_heartbeat_utc": "2026-08-27T21:01:02Z",
+    "process_started_at_utc": "2026-08-27T13:20:00Z", "last_input_utc": "2026-08-27T21:00:01Z",
+    "last_commit_utc": "2026-08-27T21:00:57Z", "last_commit_duration_ms": 17000,
+    "aggregate_lag_records": 0, "buffered_bars": 0, "buffered_source_records": 0,
+    "partitions": [{ "partition": 0, "committed_offset": 42311, "end_offset": 42311, "lag_records": 0 }],
+    "failure_count": 0, "failure_count_is_capped": false, "last_failure_utc": null, "last_failure_code": null,
+    "recent_commits": [{ "at_utc": "2026-08-27T21:00:57Z", "bars": 1000, "source_records": 7, "duration_ms": 17000 }]
   },
   "table": {
     "status": "available", "reason": null,

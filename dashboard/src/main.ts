@@ -1,7 +1,17 @@
 import "./style.css";
 
 type Alert = { at_utc: string; component: string; severity: string; code: string };
-type Commit = { at_utc: string; received: number; inserted: number };
+type Commit = { at_utc: string; bars: number | null; source_records: number | null; duration_ms: number | null };
+type Loader = {
+  status: string; state: string | null; latest_heartbeat_utc: string | null;
+  process_started_at_utc: string | null; last_input_utc: string | null;
+  last_commit_utc: string | null; last_commit_duration_ms: number | null;
+  aggregate_lag_records: number | null; buffered_bars: number | null;
+  buffered_source_records: number | null; failure_count: number;
+  failure_count_is_capped: boolean;
+  last_failure_utc: string | null; last_failure_code: string | null;
+  recent_commits: Commit[];
+};
 type Table = {
   status: "available" | "unavailable"; reason: string | null;
   last_metadata_update_utc: string | null; current_snapshot_commit_utc: string | null;
@@ -30,7 +40,7 @@ type Metrics = {
     delivery_failures: number | null; errors: number | null;
     final_metrics_at_utc: string | null; shutdown_reason: string | null;
   };
-  loader: { last_commit_utc: string | null; last_received: number | null; last_inserted: number | null; recent_commits: Commit[] };
+  loader: Loader;
   table: Table;
   costs: Cost;
   alerts: Alert[];
@@ -86,6 +96,11 @@ function money(value: number | null, currency: string | null): string {
   }
 }
 
+function duration(value: number | null): string {
+  if (value === null) return "—";
+  return value < 1000 ? `${numberFormat.format(value)} ms` : `${(value / 1000).toFixed(1)} s`;
+}
+
 function title(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -99,12 +114,12 @@ function renderChart(commits: Commit[]): void {
     return;
   }
   empty.hidden = true;
-  const largest = Math.max(...commits.map((commit) => commit.inserted), 1);
+  const largest = Math.max(...commits.map((commit) => commit.duration_ms ?? 0), 1);
   chart.replaceChildren(...commits.slice(-24).map((commit) => {
     const column = document.createElement("div");
     const bar = document.createElement("span");
-    bar.style.height = `${Math.max(8, (commit.inserted / largest) * 100)}%`;
-    bar.title = `${utc(commit.at_utc)} · ${numberFormat.format(commit.inserted)} inserted`;
+    bar.style.height = `${Math.max(8, ((commit.duration_ms ?? 0) / largest) * 100)}%`;
+    bar.title = `${utc(commit.at_utc)} · ${duration(commit.duration_ms)} · ${metric(commit.bars)} bars`;
     column.append(bar);
     return column;
   }));
@@ -172,11 +187,19 @@ function render(metricsData: Metrics): void {
   byId("last-bar").textContent = utc(extractor.last_bar_utc);
   byId("extractor-state").textContent = title(extractor.status);
   byId("last-commit").textContent = utc(loader.last_commit_utc);
-  const uniformBatches = loader.recent_commits.length > 0
-    && loader.recent_commits.every((commit) => commit.inserted === loader.last_inserted);
-  byId("commit-detail").textContent = loader.last_inserted === null
-    ? "No recent commit"
-    : `${metric(loader.last_received)} received · ${metric(loader.last_inserted)} inserted${uniformBatches ? " · uniform bounded batches" : ""}`;
+  byId("commit-detail").textContent = loader.last_commit_utc === null
+    ? "No recent durable commit"
+    : `${title(loader.state ?? loader.status)} · ${duration(loader.last_commit_duration_ms)} durable commit`;
+  byId("loader-state").textContent = loader.state ? title(loader.state) : "—";
+  byId("loader-lag").textContent = metric(loader.aggregate_lag_records);
+  byId("loader-buffered-bars").textContent = metric(loader.buffered_bars);
+  byId("loader-commit-duration").textContent = duration(loader.last_commit_duration_ms);
+  byId("loader-health-detail").textContent = loader.latest_heartbeat_utc
+    ? `Heartbeat ${utc(loader.latest_heartbeat_utc)} · last input ${utc(loader.last_input_utc)} · process started ${utc(loader.process_started_at_utc)}.`
+    : "No structured loader heartbeat in the dashboard window.";
+  byId("loader-failure-detail").textContent = loader.failure_count === 0
+    ? "No loader failures in the dashboard window."
+    : `${metric(loader.failure_count)}${loader.failure_count_is_capped ? "+" : ""} loader failure${loader.failure_count === 1 ? "" : "s"}; latest ${utc(loader.last_failure_utc)} (${title(loader.last_failure_code ?? "unknown")}).`;
   byId("received").textContent = metric(extractor.messages_received);
   byId("sent").textContent = metric(extractor.messages_sent);
   byId("delivery-failures").textContent = metric(extractor.delivery_failures);

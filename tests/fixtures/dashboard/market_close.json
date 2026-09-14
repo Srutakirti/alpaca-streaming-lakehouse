@@ -33,10 +33,63 @@
     }
   },
   {
+    "timestamp": "2026-08-27T21:00:40Z",
+    "jsonPayload": {
+      "_SYSTEMD_UNIT": "iceberg-loader.service",
+      "target": "iceberg_loader::health",
+      "fields": {
+        "event": "commit_started",
+        "state": "committing",
+        "topic": "alpaca-bars-direct-candidate",
+        "process_started_at_utc": "2026-08-27T13:20:00Z",
+        "batch_bars": 1000,
+        "batch_source_records": 7
+      }
+    }
+  },
+  {
     "timestamp": "2026-08-27T21:00:57Z",
     "jsonPayload": {
       "_SYSTEMD_UNIT": "iceberg-loader.service",
-      "MESSAGE": "committed_at=2026-08-27T21:00:57Z received=1000 inserted=1000"
+      "target": "iceberg_loader::health",
+      "fields": {
+        "event": "commit_succeeded",
+        "state": "committing",
+        "topic": "alpaca-bars-direct-candidate",
+        "process_started_at_utc": "2026-08-27T13:20:00Z",
+        "last_input_at_utc": "2026-08-27T21:00:01Z",
+        "last_commit_at_utc": "2026-08-27T21:00:57Z",
+        "last_commit_duration_ms": 17000,
+        "durable_commit_total_duration_ms": 17000
+      }
+    }
+  },
+  {
+    "timestamp": "2026-08-27T21:01:02Z",
+    "jsonPayload": {
+      "_SYSTEMD_UNIT": "iceberg-loader.service",
+      "target": "iceberg_loader::health",
+      "fields": {
+        "event": "heartbeat",
+        "state": "idle",
+        "topic": "alpaca-bars-direct-candidate",
+        "process_started_at_utc": "2026-08-27T13:20:00Z",
+        "last_input_at_utc": "2026-08-27T21:00:01Z",
+        "last_commit_at_utc": "2026-08-27T21:00:57Z",
+        "last_commit_duration_ms": 17000,
+        "aggregate_lag_records": 0,
+        "buffered_bars": 0,
+        "buffered_source_records": 0,
+        "partitions": [
+          {
+            "topic": "alpaca-bars-direct-candidate",
+            "partition": 0,
+            "committedOffset": 42311,
+            "endOffset": 42311,
+            "lagRecords": 0
+          }
+        ]
+      }
     }
   }
 ]

@@ -2,7 +2,7 @@
 
 The public dashboard is a static GitHub Pages site. It displays a deliberately
 small, safe summary of the GCE HadoopCatalog pipeline: state, UTC operational
-timestamps, counts, recent loader commits, and coded alerts. The header shows
+timestamps, durable loader lag, buffers, commit timing, counts, and coded alerts. The header shows
 the dashboard refresh time in both UTC and IST for convenience. It never includes raw logs,
 credentials, hostnames, command lines, GCS paths, project IDs, service-account
 identifiers, Cloud Logs links, or market records.
@@ -13,8 +13,8 @@ identifiers, Cloud Logs links, or market records.
 GitHub Actions schedule
   -> GitHub OIDC token
   -> GCP Workload Identity Federation
-  -> gh-pages-metrics-reader service account (roles/logging.viewer)
-  -> fixed Cloud Logging reads
+  -> gh-pages-metrics-reader service account (narrow read-only grants)
+  -> fixed Cloud Logging, Iceberg metadata, and cost snapshot reads
   -> sanitized dashboard/public/metrics.json
   -> static GitHub Pages artifact
 ```
@@ -27,8 +27,8 @@ branch, and this exact workflow file.
 ## One-time setup
 
 1. Apply the reviewed Terraform root using the existing deployment variables.
-2. Copy its two dashboard outputs into GitHub **Repository variables** (not
-   secrets), then create the third project-ID variable:
+2. Copy the dashboard outputs into GitHub **Repository variables** (not
+   secrets), then add the project-ID variable:
 
    | Repository variable | Value |
    | --- | --- |
@@ -36,9 +36,15 @@ branch, and this exact workflow file.
    | `GCP_DASHBOARD_WORKLOAD_IDENTITY_PROVIDER` | Terraform output `dashboard_workload_identity_provider` |
    | `GCP_DASHBOARD_METRICS_SERVICE_ACCOUNT` | Terraform output `dashboard_metrics_service_account` |
    | `GCP_DASHBOARD_ICEBERG_METADATA_URI` | Terraform output `dashboard_iceberg_metadata_uri` |
+   | `GCP_DASHBOARD_COST_SNAPSHOT_TABLE` | Terraform output `dashboard_cost_snapshot_table` |
 
    These values identify public resources and contain no credential. The
    short-lived credential exists only inside the GitHub Actions job.
+
+   The service account has project log-viewer access, conditional object-viewer
+   access limited to the selected Iceberg metadata prefix, and dataset-level
+   BigQuery data-viewer access limited to the safe aggregate dataset. It cannot
+   start BigQuery jobs or write pipeline resources.
 
 3. In GitHub repository **Settings → Pages**, set **Source** to **GitHub
    Actions**. The first successful deployment supplies the public site URL.
@@ -58,6 +64,33 @@ the actual `America/New_York` state:
   stale-data alerts.
 
 The initial design is not exchange-holiday aware.
+
+## Loader-health queries and presentation
+
+The exporter defaults to a 36-hour operational lookback and rejects values
+outside 1–36 hours. It uses four fixed, newest-first Cloud Logging queries with
+independent result limits:
+
+| Read | Exact source and allow-list | Limit |
+| --- | --- | ---: |
+| Extractor | Extractor JSON log, direct service, metrics/final/idle-shutdown or warning+ | 500 |
+| Loader heartbeat | Loader JSON log, loader service, health target, candidate topic, `heartbeat` | 4 |
+| Loader commits | Same fixed identity, only `commit_started` or `commit_succeeded` | 100 |
+| Loader failures | Same fixed identity, only the five classified failure events | 20 |
+
+The general journal is not queried for loader health. The exporter pairs a
+`commit_started` event with the following `commit_succeeded` event from the
+same Java process to report batch bars, source frames, and total durable commit
+duration. The latest heartbeat supplies loader state, durable Kafka lag,
+buffered bars/frames, process start, and last input. The latest successful
+commit supplies the authoritative commit timestamp and duration even when it
+arrived after the most recent heartbeat.
+
+During `market_open`, a missing or stale loader heartbeat affects overall
+health independently of commit freshness. `stalled` is unhealthy. Classified
+failures remain visible (the count is marked as capped if 20 are returned), but
+a later successful durable commit resolves a loader failure for the overall
+health badge.
 
 The metadata URI is a GitHub repository variable, not public dashboard output.
 The exporter reads only its `version-hint.text` and current `vNNN.metadata.json`

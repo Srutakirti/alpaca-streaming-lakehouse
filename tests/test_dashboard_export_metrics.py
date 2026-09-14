@@ -33,7 +33,17 @@ def test_market_close_fixture_is_sanitized_and_reports_clean_shutdown() -> None:
     assert snapshot["extractor"]["status"] == "clean_shutdown"
     assert snapshot["extractor"]["messages_sent"] == 4167
     assert snapshot["extractor"]["shutdown_reason"] == "idle_window"
-    assert snapshot["loader"]["last_inserted"] == 1000
+    assert snapshot["loader"]["state"] == "idle"
+    assert snapshot["loader"]["aggregate_lag_records"] == 0
+    assert snapshot["loader"]["last_commit_duration_ms"] == 17000
+    assert snapshot["loader"]["recent_commits"] == [
+        {
+            "at_utc": "2026-08-27T21:00:57Z",
+            "bars": 1000,
+            "source_records": 7,
+            "duration_ms": 17000,
+        }
+    ]
     assert "MESSAGE" not in json.dumps(snapshot)
     assert "_SYSTEMD_UNIT" not in json.dumps(snapshot)
     assert "example-project" not in json.dumps(snapshot)
@@ -49,7 +59,11 @@ def test_market_open_marks_stale_bar_and_commit_unhealthy() -> None:
 
     assert snapshot["market"]["state"] == "market_open"
     assert snapshot["health"]["status"] == "unhealthy"
-    assert set(snapshot["health"]["reasons"]) == {"missing_extractor_bar", "missing_loader_commit"}
+    assert set(snapshot["health"]["reasons"]) == {
+        "missing_extractor_bar",
+        "missing_loader_commit",
+        "missing_loader_heartbeat",
+    }
 
 
 def test_market_state_uses_new_york_daylight_saving_time() -> None:
@@ -62,10 +76,24 @@ def test_market_state_uses_new_york_daylight_saving_time() -> None:
 def test_fixed_filters_are_bounded_and_do_not_accept_user_lql() -> None:
     filters = fixed_log_filters("example-project", datetime(2026, 8, 27, 0, 0, tzinfo=UTC))
 
-    assert set(filters) == {"extractor", "loader"}
+    assert set(filters) == {
+        "extractor",
+        "loader_heartbeats",
+        "loader_commits",
+        "loader_failures",
+    }
     assert "alpaca-extractor.service" in filters["extractor"]
-    assert "iceberg-loader.service" in filters["loader"]
-    assert "2026-08-27T00:00:00Z" in filters["loader"]
+    assert 'fields.message="metrics"' in filters["extractor"]
+    for name in ("loader_heartbeats", "loader_commits", "loader_failures"):
+        assert "gce_hadoop_catalog_loader_json" in filters[name]
+        assert "iceberg-loader.service" in filters[name]
+        assert 'target="iceberg_loader::health"' in filters[name]
+        assert 'fields.topic="alpaca-bars-direct-candidate"' in filters[name]
+        assert "2026-08-27T00:00:00Z" in filters[name]
+        assert "gce_hadoop_catalog_journal" not in filters[name]
+    assert 'fields.event="heartbeat"' in filters["loader_heartbeats"]
+    assert 'fields.event="commit_succeeded"' in filters["loader_commits"]
+    assert 'fields.event="loader_failed"' in filters["loader_failures"]
 
 
 def test_gcloud_reads_newest_entries_before_applying_its_limit(monkeypatch) -> None:
@@ -78,9 +106,170 @@ def test_gcloud_reads_newest_entries_before_applying_its_limit(monkeypatch) -> N
     monkeypatch.setattr("dashboard.export_metrics.subprocess.run", fake_run)
 
     assert read_gcloud_logs("example-project", datetime(2026, 8, 27, tzinfo=UTC)) == []
-    assert len(commands) == 2
+    assert len(commands) == 4
     assert all("--order=desc" in command for command in commands)
-    assert all("--limit=500" in command for command in commands)
+    assert [next(part for part in command if part.startswith("--limit=")) for command in commands] == [
+        "--limit=500",
+        "--limit=4",
+        "--limit=100",
+        "--limit=20",
+    ]
+
+
+def test_loader_health_reports_catch_up_and_sanitized_failure() -> None:
+    entries = [
+        {
+            "timestamp": "2026-09-13T15:52:03Z",
+            "jsonPayload": {
+                "_SYSTEMD_UNIT": "iceberg-loader.service",
+                "target": "iceberg_loader::health",
+                "fields": {
+                    "event": "heartbeat",
+                    "state": "catching_up",
+                    "topic": "alpaca-bars-direct-candidate",
+                    "process_started_at_utc": "2026-09-13T15:49:00Z",
+                    "last_input_at_utc": "2026-09-13T15:52:02Z",
+                    "last_commit_at_utc": "2026-09-13T15:52:01Z",
+                    "last_commit_duration_ms": 12000,
+                    "aggregate_lag_records": 20469,
+                    "buffered_bars": 72,
+                    "buffered_source_records": 1,
+                    "partitions": [
+                        {
+                            "topic": "alpaca-bars-direct-candidate",
+                            "partition": 0,
+                            "committedOffset": 42316,
+                            "endOffset": 62785,
+                            "lagRecords": 20469,
+                        }
+                    ],
+                },
+            },
+        },
+        {
+            "timestamp": "2026-09-13T15:52:04Z",
+            "jsonPayload": {
+                "_SYSTEMD_UNIT": "iceberg-loader.service",
+                "target": "iceberg_loader::health",
+                "fields": {
+                    "event": "iceberg_commit_failed",
+                    "state": "committing",
+                    "topic": "alpaca-bars-direct-candidate",
+                    "process_started_at_utc": "2026-09-13T15:49:00Z",
+                    "exception_class": "private.ExceptionName",
+                },
+            },
+        },
+    ]
+
+    snapshot = build_snapshot(
+        entries,
+        DashboardSettings(project_id="example-project"),
+        datetime(2026, 9, 13, 15, 53, tzinfo=UTC),
+    )
+
+    assert snapshot["loader"]["state"] == "catching_up"
+    assert snapshot["loader"]["aggregate_lag_records"] == 20469
+    assert snapshot["loader"]["partitions"] == [
+        {
+            "partition": 0,
+            "committed_offset": 42316,
+            "end_offset": 62785,
+            "lag_records": 20469,
+        }
+    ]
+    assert snapshot["loader"]["failure_count"] == 1
+    assert snapshot["loader"]["last_failure_code"] == "loader_iceberg_commit_failed"
+    assert snapshot["alerts"][0]["code"] == "loader_iceberg_commit_failed"
+    assert "private.ExceptionName" not in json.dumps(snapshot)
+
+
+def test_market_open_marks_stale_loader_heartbeat_unhealthy() -> None:
+    entries = json.loads(FIXTURE.read_text())
+    snapshot = build_snapshot(
+        entries,
+        DashboardSettings(project_id="example-project"),
+        datetime(2026, 8, 28, 15, 0, tzinfo=UTC),
+    )
+    assert "stale_loader_heartbeat" in snapshot["health"]["reasons"]
+
+
+def test_latest_success_after_heartbeat_is_authoritative_commit() -> None:
+    entries = json.loads(FIXTURE.read_text())
+    process_start = "2026-08-27T13:20:00Z"
+    entries.extend(
+        [
+            {
+                "timestamp": "2026-08-27T21:01:10Z",
+                "jsonPayload": {
+                    "_SYSTEMD_UNIT": "iceberg-loader.service",
+                    "target": "iceberg_loader::health",
+                    "fields": {
+                        "event": "commit_started",
+                        "state": "committing",
+                        "topic": "alpaca-bars-direct-candidate",
+                        "process_started_at_utc": process_start,
+                        "batch_bars": 220,
+                        "batch_source_records": 2,
+                    },
+                },
+            },
+            {
+                "timestamp": "2026-08-27T21:01:25Z",
+                "jsonPayload": {
+                    "_SYSTEMD_UNIT": "iceberg-loader.service",
+                    "target": "iceberg_loader::health",
+                    "fields": {
+                        "event": "commit_succeeded",
+                        "state": "committing",
+                        "topic": "alpaca-bars-direct-candidate",
+                        "process_started_at_utc": process_start,
+                        "last_commit_at_utc": "2026-08-27T21:01:25Z",
+                        "durable_commit_total_duration_ms": 15000,
+                    },
+                },
+            },
+        ]
+    )
+
+    loader = build_snapshot(
+        entries,
+        DashboardSettings(project_id="example-project"),
+        datetime(2026, 8, 27, 21, 20, tzinfo=UTC),
+    )["loader"]
+
+    assert loader["last_commit_utc"] == "2026-08-27T21:01:25Z"
+    assert loader["last_commit_duration_ms"] == 15000
+    assert loader["recent_commits"][-1]["bars"] == 220
+
+
+def test_successful_commit_resolves_earlier_loader_failure_for_health() -> None:
+    entries = json.loads(FIXTURE.read_text())
+    entries.insert(
+        -2,
+        {
+            "timestamp": "2026-08-27T20:59:50Z",
+            "jsonPayload": {
+                "_SYSTEMD_UNIT": "iceberg-loader.service",
+                "target": "iceberg_loader::health",
+                "fields": {
+                    "event": "offset_commit_failed",
+                    "state": "committing",
+                    "topic": "alpaca-bars-direct-candidate",
+                    "process_started_at_utc": "2026-08-27T13:20:00Z",
+                },
+            },
+        },
+    )
+
+    snapshot = build_snapshot(
+        entries,
+        DashboardSettings(project_id="example-project"),
+        datetime(2026, 8, 27, 21, 20, tzinfo=UTC),
+    )
+
+    assert snapshot["loader"]["failure_count"] == 1
+    assert "recent_error" not in snapshot["health"]["reasons"]
 
 
 def test_new_active_metrics_do_not_reuse_a_prior_session_shutdown() -> None:

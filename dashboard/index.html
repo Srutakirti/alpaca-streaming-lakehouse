@@ -60,12 +60,20 @@
         <article class="card wide">
           <div class="card-heading">
             <div>
-              <p class="label">Loader commits</p>
-              <h2>Recent append volume</h2>
+              <p class="label">Loader health</p>
+              <h2>Durable progress</h2>
             </div>
           </div>
-          <div id="commit-chart" class="chart" aria-label="Recent inserted records by commit"></div>
-          <p id="chart-empty" class="detail">No recent commits in the dashboard window.</p>
+          <dl class="metric-list">
+            <div><dt>State</dt><dd id="loader-state">—</dd></div>
+            <div><dt>Kafka lag</dt><dd id="loader-lag">—</dd></div>
+            <div><dt>Buffered bars</dt><dd id="loader-buffered-bars">—</dd></div>
+            <div><dt>Last commit time</dt><dd id="loader-commit-duration">—</dd></div>
+          </dl>
+          <p id="loader-health-detail" class="detail">Loader health unavailable.</p>
+          <p id="loader-failure-detail" class="detail">Loader failure history unavailable.</p>
+          <div id="commit-chart" class="chart" aria-label="Recent durable commit duration"></div>
+          <p id="chart-empty" class="detail">No recent commit durations in the dashboard window.</p>
         </article>
       </section>
 

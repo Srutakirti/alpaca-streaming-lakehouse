@@ -17,11 +17,23 @@ from zoneinfo import ZoneInfo
 
 
 EXTRACTOR_LOG = "gce_hadoop_catalog_extractor_json"
-JOURNAL_LOG = "gce_hadoop_catalog_journal"
+LOADER_HEALTH_LOG = "gce_hadoop_catalog_loader_json"
+LOADER_HEALTH_TARGET = "iceberg_loader::health"
+LOADER_TOPIC = "alpaca-bars-direct-candidate"
 NEW_YORK = ZoneInfo("America/New_York")
-COMMIT_PATTERN = re.compile(
-    r"committed_at=(?P<committed_at>\S+) received=(?P<received>\d+) inserted=(?P<inserted>\d+)"
-)
+LOADER_FAILURE_EVENTS = {
+    "data_file_write_failed",
+    "iceberg_commit_failed",
+    "iceberg_commit_state_unknown",
+    "offset_commit_failed",
+    "loader_failed",
+}
+LOG_QUERY_LIMITS = {
+    "extractor": 500,
+    "loader_heartbeats": 4,
+    "loader_commits": 100,
+    "loader_failures": 20,
+}
 SAFE_ICEBERG_OPERATIONS = {"append", "overwrite", "replace", "delete"}
 METADATA_VERSION_PATTERN = re.compile(r"[1-9]\d*")
 COST_SNAPSHOT_TABLE_PATTERN = re.compile(
@@ -46,6 +58,8 @@ class DashboardSettings:
     bar_unhealthy_minutes: int = 10
     commit_warning_minutes: int = 10
     commit_unhealthy_minutes: int = 15
+    heartbeat_warning_minutes: int = 5
+    heartbeat_unhealthy_minutes: int = 10
     history_limit: int = 48
 
 
@@ -91,11 +105,39 @@ def fixed_log_filters(project_id: str, start: datetime) -> dict[str, str]:
         "extractor": (
             f'logName="projects/{project_id}/logs/{EXTRACTOR_LOG}" AND '
             'jsonPayload._SYSTEMD_UNIT="alpaca-extractor.service" AND '
+            '(jsonPayload.fields.message="metrics" OR '
+            'jsonPayload.fields.message="final metrics" OR '
+            'jsonPayload.fields.message="no bar data within idle window; shutting down producer" OR '
+            'severity>=WARNING) AND '
             f'timestamp >= "{since}"'
         ),
-        "loader": (
-            f'logName="projects/{project_id}/logs/{JOURNAL_LOG}" AND '
+        "loader_heartbeats": (
+            f'logName="projects/{project_id}/logs/{LOADER_HEALTH_LOG}" AND '
             'jsonPayload._SYSTEMD_UNIT="iceberg-loader.service" AND '
+            f'jsonPayload.target="{LOADER_HEALTH_TARGET}" AND '
+            f'jsonPayload.fields.topic="{LOADER_TOPIC}" AND '
+            'jsonPayload.fields.event="heartbeat" AND '
+            f'timestamp >= "{since}"'
+        ),
+        "loader_commits": (
+            f'logName="projects/{project_id}/logs/{LOADER_HEALTH_LOG}" AND '
+            'jsonPayload._SYSTEMD_UNIT="iceberg-loader.service" AND '
+            f'jsonPayload.target="{LOADER_HEALTH_TARGET}" AND '
+            f'jsonPayload.fields.topic="{LOADER_TOPIC}" AND '
+            '(jsonPayload.fields.event="commit_started" OR '
+            'jsonPayload.fields.event="commit_succeeded") AND '
+            f'timestamp >= "{since}"'
+        ),
+        "loader_failures": (
+            f'logName="projects/{project_id}/logs/{LOADER_HEALTH_LOG}" AND '
+            'jsonPayload._SYSTEMD_UNIT="iceberg-loader.service" AND '
+            f'jsonPayload.target="{LOADER_HEALTH_TARGET}" AND '
+            f'jsonPayload.fields.topic="{LOADER_TOPIC}" AND '
+            '(jsonPayload.fields.event="data_file_write_failed" OR '
+            'jsonPayload.fields.event="iceberg_commit_failed" OR '
+            'jsonPayload.fields.event="iceberg_commit_state_unknown" OR '
+            'jsonPayload.fields.event="offset_commit_failed" OR '
+            'jsonPayload.fields.event="loader_failed") AND '
             f'timestamp >= "{since}"'
         ),
     }
@@ -104,7 +146,7 @@ def fixed_log_filters(project_id: str, start: datetime) -> dict[str, str]:
 def read_gcloud_logs(project_id: str, start: datetime) -> list[dict[str, Any]]:
     """Read bounded entries with fixed filters; callers cannot inject LQL."""
     entries: list[dict[str, Any]] = []
-    for log_filter in fixed_log_filters(project_id, start).values():
+    for name, log_filter in fixed_log_filters(project_id, start).items():
         result = subprocess.run(
             [
                 "gcloud",
@@ -112,7 +154,7 @@ def read_gcloud_logs(project_id: str, start: datetime) -> list[dict[str, Any]]:
                 "read",
                 log_filter,
                 f"--project={project_id}",
-                "--limit=500",
+                f"--limit={LOG_QUERY_LIMITS[name]}",
                 # Cloud Logging applies --limit before returning entries. Read
                 # newest-first so a busy current session cannot be displaced by
                 # older entries in the lookback window; build_snapshot sorts for
@@ -239,7 +281,7 @@ def build_snapshot(
     now = now.astimezone(UTC)
     state, next_open = market_state(now)
     extractor_events = []
-    commits = []
+    loader_events = []
     alerts = []
 
     for entry in entries:
@@ -254,31 +296,24 @@ def build_snapshot(
             if alert is not None:
                 alerts.append(alert)
         elif unit == "iceberg-loader.service":
-            message = payload.get("MESSAGE", "")
-            match = COMMIT_PATTERN.search(message)
-            if match:
-                commits.append(
-                    {
-                        "at_utc": utc_text(parse_utc(match.group("committed_at"))),
-                        "received": int(match.group("received")),
-                        "inserted": int(match.group("inserted")),
-                    }
-                )
-            alert = _safe_alert("loader", payload, entry_time)
-            if alert is not None:
-                alerts.append(alert)
+            event = _extract_loader_event(payload, entry_time)
+            if event is not None:
+                loader_events.append(event)
+                alert = _loader_alert(event)
+                if alert is not None:
+                    alerts.append(alert)
 
     extractor_events.sort(key=lambda event: event["at"])
-    commits.sort(key=lambda commit: commit["at_utc"])
+    loader_events.sort(key=lambda event: event["at"])
     alerts.sort(key=lambda alert: alert["at_utc"], reverse=True)
 
     extractor = _extractor_summary(extractor_events)
-    loader = _loader_summary(commits, settings.history_limit)
+    loader = _loader_summary(loader_events, settings.history_limit)
     table = summarize_table_metadata(table_metadata, unavailable_reason=table_unavailable_reason)
     costs = summarize_cost_snapshot(cost_snapshot, now, unavailable_reason=cost_unavailable_reason)
     health = _health(state, now, extractor, loader, alerts, settings)
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "generated_at_utc": utc_text(now),
         "market": {"state": state, "next_expected_open_utc": utc_text(next_open)},
         "health": health,
@@ -363,14 +398,139 @@ def _extractor_summary(events: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _loader_summary(commits: list[dict[str, Any]], limit: int) -> dict[str, Any]:
-    latest = commits[-1] if commits else None
+def _extract_loader_event(
+    payload: dict[str, Any], entry_time: datetime
+) -> dict[str, Any] | None:
+    if payload.get("target") != LOADER_HEALTH_TARGET:
+        return None
+    fields = payload.get("fields")
+    if not isinstance(fields, dict):
+        return None
+    event = fields.get("event")
+    if event not in {"heartbeat", "commit_started", "commit_succeeded"} | LOADER_FAILURE_EVENTS:
+        return None
+    if fields.get("topic") != LOADER_TOPIC:
+        return None
+    return {"at": entry_time, "event": event, "fields": fields}
+
+
+def _loader_alert(event: dict[str, Any]) -> dict[str, str] | None:
+    if event["event"] not in LOADER_FAILURE_EVENTS:
+        return None
     return {
-        "last_commit_utc": latest["at_utc"] if latest else None,
-        "last_received": latest["received"] if latest else None,
-        "last_inserted": latest["inserted"] if latest else None,
+        "at_utc": utc_text(event["at"]),
+        "component": "loader",
+        "severity": "ERROR",
+        "code": _loader_failure_code(event["event"]),
+    }
+
+
+def _loader_summary(events: list[dict[str, Any]], limit: int) -> dict[str, Any]:
+    latest_event = events[-1] if events else None
+    latest_process = latest_event["fields"].get("process_started_at_utc") if latest_event else None
+    latest_heartbeat = next(
+        (
+            event
+            for event in reversed(events)
+            if event["event"] == "heartbeat"
+            and event["fields"].get("process_started_at_utc") == latest_process
+        ),
+        None,
+    )
+    latest_success = next(
+        (event for event in reversed(events) if event["event"] == "commit_succeeded"), None
+    )
+    failures = [event for event in events if event["event"] in LOADER_FAILURE_EVENTS]
+    pending: dict[str, dict[str, Any]] = {}
+    commits: list[dict[str, Any]] = []
+    for event in events:
+        fields = event["fields"]
+        process_start = fields.get("process_started_at_utc")
+        if not isinstance(process_start, str):
+            continue
+        if event["event"] == "commit_started":
+            pending[process_start] = event
+        elif event["event"] == "commit_succeeded":
+            started = pending.pop(process_start, None)
+            started_fields = started["fields"] if started else {}
+            commits.append(
+                {
+                    "at_utc": _loader_timestamp(fields.get("last_commit_at_utc"), event["at"]),
+                    "bars": _integer(started_fields.get("batch_bars")),
+                    "source_records": _integer(started_fields.get("batch_source_records")),
+                    "duration_ms": _integer(fields.get("durable_commit_total_duration_ms")),
+                }
+            )
+        elif event["event"] in LOADER_FAILURE_EVENTS:
+            pending.pop(process_start, None)
+
+    current = latest_heartbeat or latest_event
+    current_fields = current["fields"] if current else {}
+    success_fields = latest_success["fields"] if latest_success else {}
+    partitions = _loader_partitions(current_fields.get("partitions"))
+    last_commit = success_fields.get("last_commit_at_utc") or current_fields.get("last_commit_at_utc")
+    return {
+        "status": "observed" if current else "no_recent_signal",
+        "state": current_fields.get("state") if isinstance(current_fields.get("state"), str) else None,
+        "latest_heartbeat_utc": utc_text(latest_heartbeat["at"]) if latest_heartbeat else None,
+        "process_started_at_utc": _optional_utc(current_fields.get("process_started_at_utc")),
+        "last_input_utc": _optional_utc(current_fields.get("last_input_at_utc")),
+        "last_commit_utc": _optional_utc(last_commit),
+        "last_commit_duration_ms": _integer(
+            success_fields.get("durable_commit_total_duration_ms")
+            if success_fields.get("durable_commit_total_duration_ms") is not None
+            else current_fields.get("last_commit_duration_ms")
+        ),
+        "aggregate_lag_records": _integer(current_fields.get("aggregate_lag_records")),
+        "buffered_bars": _integer(current_fields.get("buffered_bars")),
+        "buffered_source_records": _integer(current_fields.get("buffered_source_records")),
+        "partitions": partitions,
+        "failure_count": len(failures),
+        "failure_count_is_capped": len(failures) == LOG_QUERY_LIMITS["loader_failures"],
+        "last_failure_utc": utc_text(failures[-1]["at"]) if failures else None,
+        "last_failure_code": _loader_failure_code(failures[-1]["event"]) if failures else None,
         "recent_commits": commits[-limit:],
     }
+
+
+def _loader_failure_code(event: str) -> str:
+    return event if event.startswith("loader_") else f"loader_{event}"
+
+
+def _loader_timestamp(value: Any, fallback: datetime) -> str:
+    return _optional_utc(value) or utc_text(fallback)
+
+
+def _optional_utc(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return utc_text(parse_utc(value))
+    except ValueError:
+        return None
+
+
+def _loader_partitions(value: Any) -> list[dict[str, int]]:
+    if not isinstance(value, list):
+        return []
+    partitions: list[dict[str, int]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        partition = _integer(item.get("partition"))
+        committed = _integer(item.get("committedOffset", item.get("committed_offset")))
+        end = _integer(item.get("endOffset", item.get("end_offset")))
+        lag = _integer(item.get("lagRecords", item.get("lag_records")))
+        if None not in {partition, committed, end, lag}:
+            partitions.append(
+                {
+                    "partition": partition,
+                    "committed_offset": committed,
+                    "end_offset": end,
+                    "lag_records": lag,
+                }
+            )
+    return partitions
 
 
 def summarize_table_metadata(
@@ -615,13 +775,30 @@ def _health(
             reasons, status, "loader_commit", loader["last_commit_utc"], now,
             settings.commit_warning_minutes, settings.commit_unhealthy_minutes,
         )
+        status = _apply_freshness(
+            reasons, status, "loader_heartbeat", loader["latest_heartbeat_utc"], now,
+            settings.heartbeat_warning_minutes, settings.heartbeat_unhealthy_minutes,
+        )
+        if loader["state"] == "stalled":
+            status = "unhealthy"
+            reasons.append("loader_stalled")
     elif state == "settling" and extractor["final_metrics_at_utc"] is None:
         status = "warning"
         reasons.append("awaiting_clean_shutdown")
     elif state in {"closed", "weekend", "pre_open"} and extractor["status"] == "no_recent_session":
         status = "unknown"
         reasons.append("no_recent_session")
-    if any(alert["severity"] == "ERROR" for alert in alerts):
+    unresolved_errors = [
+        alert
+        for alert in alerts
+        if alert["severity"] == "ERROR"
+        and (
+            alert["component"] != "loader"
+            or loader["last_commit_utc"] is None
+            or parse_utc(alert["at_utc"]) > parse_utc(loader["last_commit_utc"])
+        )
+    ]
+    if unresolved_errors:
         status = "unhealthy"
         reasons.append("recent_error")
     return {"status": status, "reasons": reasons}
@@ -680,6 +857,8 @@ def main() -> None:
         parser.error("use at most one table metadata input")
     if args.cost_snapshot_input and args.cost_snapshot_table:
         parser.error("use at most one cost snapshot input")
+    if not 1 <= args.lookback_hours <= 36:
+        parser.error("--lookback-hours must be between 1 and 36")
     now = parse_utc(args.now) if args.now else datetime.now(UTC)
     if args.input:
         entries = json.loads(args.input.read_text())
