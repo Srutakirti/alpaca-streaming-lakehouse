@@ -250,3 +250,22 @@ The raw billing export is never read by GitHub Actions or exposed publicly.
   failure.
 - Validate fixed query filters against Cloud Logging, the public-data boundary,
   unit tests, and a production frontend build.
+
+### L2: Live public acceptance — complete
+
+- Workflow run
+  [`34809374566`](https://github.com/Srutakirti/alpaca-streaming-lakehouse/actions/runs/34809374566)
+  authenticated through WIF, executed the four bounded log reads, generated the
+  sanitized snapshot, built the frontend, and deployed GitHub Pages from commit
+  `84759e7`.
+- The deployed `metrics.json` uses schema version 3 and passed the public-data
+  boundary check for raw journal fields, project/topic identifiers, GCS paths,
+  warehouse names, and exception classes.
+- Live acceptance correctly detected an operational incident that an
+  `active (running)` systemd status alone did not expose: the loader's last
+  heartbeat and successful commit were at 2026-09-13 15:58 UTC, after which a
+  new commit started but produced no further health event. The public page
+  reports `unhealthy` with `stale_loader_heartbeat` during `pre_open`.
+- VM inspection corroborated the signal: the loader process remained active at
+  520 MiB with no memory available beneath its 600 MiB cgroup maximum. Service
+  recovery is an explicit operational action outside this dashboard checkpoint.
