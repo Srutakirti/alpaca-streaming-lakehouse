@@ -9,7 +9,7 @@
     "final_metrics_at_utc": "2026-08-27T21:10:24Z", "shutdown_reason": "idle_window"
   },
   "loader": {
-    "status": "observed", "state": "idle", "latest_heartbeat_utc": "2026-08-27T21:01:02Z",
+    "status": "observed", "state": "idle", "latest_heartbeat_utc": "2026-08-27T21:15:02Z",
     "process_started_at_utc": "2026-08-27T13:20:00Z", "last_input_utc": "2026-08-27T21:00:01Z",
     "last_commit_utc": "2026-08-27T21:00:57Z", "last_commit_duration_ms": 17000,
     "aggregate_lag_records": 0, "buffered_bars": 0, "buffered_source_records": 0,

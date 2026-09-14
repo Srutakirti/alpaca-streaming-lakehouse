@@ -775,19 +775,19 @@ def _health(
             reasons, status, "loader_commit", loader["last_commit_utc"], now,
             settings.commit_warning_minutes, settings.commit_unhealthy_minutes,
         )
-        status = _apply_freshness(
-            reasons, status, "loader_heartbeat", loader["latest_heartbeat_utc"], now,
-            settings.heartbeat_warning_minutes, settings.heartbeat_unhealthy_minutes,
-        )
-        if loader["state"] == "stalled":
-            status = "unhealthy"
-            reasons.append("loader_stalled")
     elif state == "settling" and extractor["final_metrics_at_utc"] is None:
         status = "warning"
         reasons.append("awaiting_clean_shutdown")
     elif state in {"closed", "weekend", "pre_open"} and extractor["status"] == "no_recent_session":
         status = "unknown"
         reasons.append("no_recent_session")
+    status = _apply_freshness(
+        reasons, status, "loader_heartbeat", loader["latest_heartbeat_utc"], now,
+        settings.heartbeat_warning_minutes, settings.heartbeat_unhealthy_minutes,
+    )
+    if loader["state"] == "stalled":
+        status = "unhealthy"
+        reasons.append("loader_stalled")
     unresolved_errors = [
         alert
         for alert in alerts

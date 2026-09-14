@@ -65,7 +65,7 @@
     }
   },
   {
-    "timestamp": "2026-08-27T21:01:02Z",
+    "timestamp": "2026-08-27T21:15:02Z",
     "jsonPayload": {
       "_SYSTEMD_UNIT": "iceberg-loader.service",
       "target": "iceberg_loader::health",

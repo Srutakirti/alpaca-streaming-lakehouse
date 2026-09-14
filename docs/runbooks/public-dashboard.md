@@ -86,11 +86,12 @@ buffered bars/frames, process start, and last input. The latest successful
 commit supplies the authoritative commit timestamp and duration even when it
 arrived after the most recent heartbeat.
 
-During `market_open`, a missing or stale loader heartbeat affects overall
-health independently of commit freshness. `stalled` is unhealthy. Classified
-failures remain visible (the count is marked as capped if 20 are returned), but
-a later successful durable commit resolves a loader failure for the overall
-health badge.
+A missing or stale loader heartbeat affects overall health in every market
+state because the long-lived loader can drain backlog off-hours. Commit
+freshness is assessed only during `market_open`. `stalled` is unhealthy.
+Classified failures remain visible (the count is marked as capped if 20 are
+returned), but a later successful durable commit resolves a loader failure for
+the overall health badge.
 
 The metadata URI is a GitHub repository variable, not public dashboard output.
 The exporter reads only its `version-hint.text` and current `vNNN.metadata.json`

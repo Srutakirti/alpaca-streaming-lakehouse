@@ -194,6 +194,18 @@ def test_market_open_marks_stale_loader_heartbeat_unhealthy() -> None:
     assert "stale_loader_heartbeat" in snapshot["health"]["reasons"]
 
 
+def test_pre_open_still_marks_stale_loader_heartbeat_unhealthy() -> None:
+    snapshot = build_snapshot(
+        json.loads(FIXTURE.read_text()),
+        DashboardSettings(project_id="example-project"),
+        datetime(2026, 8, 28, 12, 0, tzinfo=UTC),
+    )
+
+    assert snapshot["market"]["state"] == "pre_open"
+    assert snapshot["health"]["status"] == "unhealthy"
+    assert "stale_loader_heartbeat" in snapshot["health"]["reasons"]
+
+
 def test_latest_success_after_heartbeat_is_authoritative_commit() -> None:
     entries = json.loads(FIXTURE.read_text())
     process_start = "2026-08-27T13:20:00Z"
@@ -416,7 +428,10 @@ def test_cost_snapshot_exposes_only_safe_aggregate_values() -> None:
     rendered = json.dumps(snapshot["costs"])
     assert "example-project" not in rendered
     assert "billing_account" not in rendered
-    assert snapshot["health"] == {"status": "unknown", "reasons": ["no_recent_session"]}
+    assert snapshot["health"] == {
+        "status": "unhealthy",
+        "reasons": ["no_recent_session", "missing_loader_heartbeat"],
+    }
 
 
 def test_invalid_cost_snapshot_is_informational_only() -> None:
@@ -429,7 +444,10 @@ def test_invalid_cost_snapshot_is_informational_only() -> None:
 
     assert snapshot["costs"]["status"] == "unavailable"
     assert snapshot["costs"]["reason"] == "invalid_snapshot"
-    assert snapshot["health"] == {"status": "unknown", "reasons": ["no_recent_session"]}
+    assert snapshot["health"] == {
+        "status": "unhealthy",
+        "reasons": ["no_recent_session", "missing_loader_heartbeat"],
+    }
 
 
 def test_cost_reader_uses_one_bounded_table_data_read(monkeypatch) -> None:

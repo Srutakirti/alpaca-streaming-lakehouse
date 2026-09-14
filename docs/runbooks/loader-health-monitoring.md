@@ -138,9 +138,11 @@ LOADER_MAX_POLL_RECORDS=1
 
 The 15-minute Kafka poll allowance prevents a known slow GCS/Iceberg commit
 from immediately removing this single consumer from its group. A blocked call
-cannot emit heartbeats from the same thread. During market hours, five minutes
-without a heartbeat is a warning and ten minutes is unhealthy. A reported
-`stalled` state is unhealthy immediately.
+cannot emit heartbeats from the same thread. Because the loader is a long-lived
+service that can drain backlog outside market hours, five minutes without a
+heartbeat is a warning and ten minutes is unhealthy in every market state. A
+reported `stalled` state is unhealthy immediately. Commit freshness remains a
+market-hours-only expectation.
 
 ## Commit timing boundaries
 

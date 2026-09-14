@@ -245,7 +245,8 @@ The raw billing export is never read by GitHub Actions or exposed publicly.
   infrastructure identifiers.
 - Replace the repetitive bounded-batch volume emphasis with current durable
   progress and a recent commit-duration chart.
-- Treat missing/stale market-hours heartbeats and `stalled` as health failures;
-  a later successful commit resolves an earlier loader commit failure.
+- Treat missing/stale heartbeats in every market state and `stalled` as health
+  failures; a later successful commit resolves an earlier loader commit
+  failure.
 - Validate fixed query filters against Cloud Logging, the public-data boundary,
   unit tests, and a production frontend build.
